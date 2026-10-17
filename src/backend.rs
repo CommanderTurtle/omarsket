@@ -41,7 +41,7 @@ impl Backend {
             .map(PathBuf::from)
             .unwrap_or_else(|| root.join("backend/.venv/bin/python"));
         if !worker.is_file() || !python.is_file() {
-            return Err("Python backend is not built. Run bash build-plugin.sh (or set OMARSKET_WORKER and OMARSKET_PYTHON).".into());
+            return Err("Python backend is not initialized. Run bash build-plugin.sh in the plugin checkout (or set OMARSKET_WORKER and OMARSKET_PYTHON).".into());
         }
         let mut command = Command::new(python);
         command

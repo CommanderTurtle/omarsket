@@ -34,6 +34,18 @@ test("native manifest points to real source components",()=>{
   expect(panel).toContain("Ui.KeyboardPanel");expect(panel).toContain("Commons.Color");
   expect(panel).not.toMatch(/#[0-9a-f]{6}/i);
 });
+test("native setup keeps generated environments outside the plugin checkout",()=>{
+  const build=readFileSync(resolve(root,"scripts/build.sh"),"utf8");
+  const service=readFileSync(resolve(root,"qml/Service.qml"),"utf8");
+  expect(build).toContain('--target-dir "$CACHE/target"');
+  expect(build).toContain('OUT="${XDG_DATA_HOME:-$HOME/.local/share}/omarsket/runtime"');
+  expect(build).toContain('OUT="$CACHE/runner"');
+  expect(service).toContain('"/omarsket/runtime/bin/omarsket"');
+  expect(service).toContain('Quickshell.env("XDG_DATA_HOME")');
+  expect(build).not.toMatch(/^\s*(sudo|pacman|omarchy plugin|cp -R)\b/m);
+  expect(build).not.toContain('$ROOT/dist');
+  expect(build).not.toContain('ln -s');
+});
 test("schedule names and imported extensions are handled consistently",()=>{
   expect(api.uniqueName(["Task","Task 2"],"Task")).toBe("Task 3");
   expect(api.filename("/tmp/paste.omscht")).toBe("paste");

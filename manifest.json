@@ -10,11 +10,22 @@
   "keepLoaded": true,
   "entryPoints": {"service": "qml/Service.qml", "barWidget": "qml/Panel.qml"},
   "dependencies": [
+    {"name":"cargo","package":"rust","why":"Compile the task engine during initialization"},
+    {"name":"cc","package":"gcc","why":"Link the task engine during initialization"},
+    {"name":"uv","package":"uv","why":"Initialize the private Python environment"},
+    {"name":"python3","package":"python","why":"Wayland-automation input backend"},
+    {"name":"git","package":"git","why":"Fetch the pinned Wayland-automation dependency"},
+    {"name":"hyprctl","package":"hyprland","why":"Cursor coordinates and monitor geometry"},
     {"name":"wtype","package":"wtype","why":"Wayland keyboard input"},
     {"name":"wl-copy","package":"wl-clipboard","why":"Paste actions"},
     {"name":"zenity","package":"zenity","why":"Task and data file selection"},
     {"name":"wayland-info","package":"wayland-utils","why":"Wayland capability checks"},
-    {"name":"grim","package":"grim","why":"Screenshot actions"}
+    {"name":"grim","package":"grim","why":"Screenshot actions"},
+    {"name":"xdg-open","package":"xdg-utils","why":"Open files, folders and URLs"},
+    {"name":"wpctl","package":"wireplumber","why":"Audio system actions"},
+    {"name":"pkill","package":"procps-ng","why":"Stop a selected user process"},
+    {"name":"systemctl","package":"systemd","why":"Power system actions"},
+    {"name":"loginctl","package":"systemd","why":"Log out of the current session"}
   ],
   "barWidget": {
     "displayName": "Omarsket", "category": "Productivity",

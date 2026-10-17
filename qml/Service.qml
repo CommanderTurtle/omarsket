@@ -18,7 +18,7 @@ Item {
   property string error: ""
   property int serial: 0
   property var callbacks: ({})
-  readonly property string helper: decodeURIComponent(Qt.resolvedUrl("../bin/omarsket").toString().replace(/^file:\/\//, ""))
+  readonly property string helper: (Quickshell.env("XDG_DATA_HOME") || (Quickshell.env("HOME") + "/.local/share")) + "/omarsket/runtime/bin/omarsket"
   readonly property int activeCount: jobs.filter(function(j) { return j.state === "running" || j.state === "scheduled" }).length
   function apply(snapshot) {
     tasks = snapshot.tasks || []; data = snapshot.data || ({}); jobs = snapshot.jobs || []
@@ -26,7 +26,7 @@ Item {
   }
   function refresh() { call({method: "snapshot"}, function(s, error) { if(!error)root.apply(s) }) }
   function call(request, callback) {
-    if (!ready) { error = "Build the Linux runtime, then start Omarsket."; if(callback)callback(null,error); return }
+    if (!ready) { error = "Run bash build-plugin.sh in the plugin checkout, then enable Omarsket."; if(callback)callback(null,error); return }
     var id = ++serial
     request.id = id
     if (callback) callbacks[id] = callback

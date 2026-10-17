@@ -437,7 +437,7 @@ Ui.Panel {
           }
           Column {
             width:parent.width;spacing:Style.space(8);visible:root.tab==="About"
-            Text {width:parent.width;wrapMode:Text.Wrap;text:"Omarsket · 0.1.0\nQuickshell / Rust / Wayland-automation\nTheme: Omarchy\nCommanderTurtle/omarksket";textFormat:Text.PlainText;color:root.fg;font.family:root.face;font.pixelSize:Style.font.body}
+            Text {width:parent.width;wrapMode:Text.Wrap;text:"Omarsket · 0.1.0\nQuickshell / Rust / Wayland-automation\nTheme: Omarchy\nCommanderTurtle/omarsket";textFormat:Text.PlainText;color:root.fg;font.family:root.face;font.pixelSize:Style.font.body}
           }
         }
       }

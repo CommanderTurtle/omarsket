@@ -1,95 +1,60 @@
 # Omarsket
 
-Tasket-style automation for Omarchy/Hyprland. Native Quickshell panel, Rust task
-engine, and a Python [Wayland-automation](https://github.com/CommanderTurtle/Wayland-automation)
-backend. No network listener, telemetry, root input hooks, or separate service.
+Macro schedules for Omarchy Quattro / Hyprland. Rust task engine and a private
+[Wayland-automation](https://github.com/CommanderTurtle/Wayland-automation) backend.
+No network listener, telemetry or separately installed service.
 
-## Build
+## Install
 
-On Linux, alongside the WA fork at commit `83b7e61`:
-
-```sh
-bash build-plugin.sh --install
-```
-
-Use `--install-deps` to install Arch build/input packages explicitly. Alternatively
-set `WA_SOURCE=/path/to/Wayland-automation`. Without a local checkout, the builder
-fetches the pinned fork revision; that commit must be published first.
-
-The optional standalone runner uses the same engine and backend, without the GUI:
+Requires Omarchy Quattro, Hyprland and these Arch packages:
 
 ```sh
-bash build-runner.sh --install
-omarsket run "Task name"
+sudo pacman -S --needed rust gcc uv python git wtype wl-clipboard zenity \
+  wayland-utils grim xdg-utils wireplumber procps-ng
+omarchy plugin add https://github.com/CommanderTurtle/omarsket.git
 ```
 
-Both builders produce their packages under `dist/`. The installed plugin runs one
-shared, owned task process across the bar's monitors. Closing its panel does not
-stop a task. Disabling/reloading the plugin stops its process and releases input.
-Right-click the bar icon to stop tasks immediately. An optional Hyprland binding:
-
-```ini
-bind = SUPER SHIFT, F10, exec, omarchy-shell io.github.commanderturtle.omarsket stop
-```
-
-## Tasks
-
-Create actions in the panel, save, and schedule. Each task has its own tab, delay,
-loop count, countdown and stop control. Temporary runs use a draft without saving
-a file. Rename/duplicate/import/export live in File; task tools include list
-duplication, rescaling, startup schedules and desktop launchers. Tasks execute serially with delay,
-finite/infinite looping, per-action repetition, nested task calls, progress and
-stop controls. Edit/reorder/duplicate actions, record keys in the focused recorder,
-capture cursor coordinates, and rescale paths for another resolution. Data stores
-reusable text, key maps and cursor paths. Startup execution is opt-in.
-
-Schedules are individual `schedules/NAME.omscht` JSON files, not a live monolithic
-library. Shared snippets live in `data.json`. On opening, existing `library.json`
-is migrated and `.scht` files in `schedules/`, `saved_tasks/` or the data directory
-are converted automatically. Originals remain intact; a migration journal prevents
-deleted imports from reappearing. File also imports an external folder or transfers
-a full collection through `library.json`. Existing names are never overwritten by
-imports. Native files can be reloaded without restarting the plugin.
-
-Tasket `.scht` import/export retains its six action types and embedded data.
-`.omscht` also stores task delay, loops and permissions. Imported tasks never
-enable startup or system commands automatically. New actions such as scroll/move
-and type are Omarsket extensions, not portable back to Windows Tasket. Qt's binary
-`programData.ini` is not imported: use embedded `.scht` data or Omarsket data JSON.
-
-Linux system actions use `xdg-open`, `wpctl`, `grim`, `systemctl`, and `loginctl`;
-program arguments use POSIX quoting. System/file actions require the task's explicit
-permission. Windows application paths, device GUIDs and shell commands require
-Linux replacements. FN hardware keys cannot be synthesized. Hyprland monitor
-coordinates are logical desktop coordinates, including negative origins.
-
-Saved tasks/data are private files under `$XDG_DATA_HOME/omarsket` (normally
-`~/.local/share/omarsket`). Override with `--directory PATH` or the plugin's
-`directory` setting; legacy `--library FILE` migrates that file into its containing
-directory. Files are limited to 16 MiB each. Only changed schedules are rewritten;
-edits detected on disk must be reloaded before saving. Exports never overwrite an existing file. A task holds
-one virtual input session; stop releases held input. No raw keyboard recording
-or membership in the Linux `input` group is required.
-
-## Checks
+Choose **No** at the enable prompt, then initialize and enable:
 
 ```sh
-cargo test
-cargo build
-python3 -m unittest discover -s tests -p 'test_*.py'
-bun test tests/frontend.test.js
+cd ~/.config/omarchy/plugins/io.github.commanderturtle.omarsket
+bash build-plugin.sh
+omarchy plugin enable io.github.commanderturtle.omarsket
 ```
 
-The backend check in Tools probes the installed library, commands and actual
-Wayland protocol support. Device-free tests do not establish live compositor
-compatibility; run the plugin and that check in an Omarchy session before relying
-on automation. The WA fork carries its own protocol/input regression suite.
+Initialization builds the locked Rust dependencies and installs the pinned WA fork
+from `backend/requirements.txt` into a private Python environment. Runtime files
+live in `~/.local/share/omarsket/runtime`; build files in `~/.cache/omarsket`
+(`XDG_DATA_HOME` / `XDG_CACHE_HOME` are respected). It never installs system packages, copies
+plugins or edits shell configuration. Normal startup needs no downloads.
+For an unpublished WA checkout, set `WA_SOURCE=/absolute/path/to/Wayland-automation`.
 
-## References
+## Use
 
-[Tasket](https://github.com/AmirHammouteneEI/ScheduledPasteAndKeys) provides the task
-format and interaction premise. [Sill](https://github.com/fernandomenolli/omarchy-sill)
-and [OmaGravastar](https://github.com/Dankestrick/OmaGravastar) inform the native
-plugin integration; Omarsket's QML and Rust code are independently written.
-Dependencies: serde, serde_json, libc, Wayland-automation, and Omarchy's shared QML
-components. AGPL-3.0-only; dependencies retain their own terms.
+Click the bar icon, create a schedule, add actions, save and schedule it. Right-click
+the icon to stop all runs. Tools checks input capabilities. Imported schedules
+require explicit permission for system commands and startup execution.
+
+Schedules are individual `.omscht` files under `~/.local/share/omarsket/schedules`
+(or `$XDG_DATA_HOME`). Existing `.scht` files there or in `saved_tasks/` convert on
+opening without removing originals. File provides import/export and collection
+JSON; Data manages reusable snippets. Optional runner: `bash build-runner.sh`.
+
+## Update / remove
+
+Disable before updating, run `omarchy plugin update io.github.commanderturtle.omarsket`,
+repeat initialization in its checkout, then enable again.
+
+```sh
+omarchy plugin remove io.github.commanderturtle.omarsket
+```
+
+Removal unloads the plugin and removes its checkout. To also erase the runtime,
+saved schedules/snippets and build cache (including the optional runner):
+
+```sh
+rm -rf -- "${XDG_DATA_HOME:-$HOME/.local/share}/omarsket" \
+  "${XDG_CACHE_HOME:-$HOME/.cache}/omarsket"
+```
+
+Remove any custom schedule directory or launchers separately. AGPL-3.0-only.
