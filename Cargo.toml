@@ -1,0 +1,19 @@
+[package]
+name = "omarsket"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-only"
+repository = "https://github.com/CommanderTurtle/omarksket"
+description = "Native Omarchy task automation with a Wayland-automation input backend"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

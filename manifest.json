@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.commanderturtle.omarsket",
+  "name": "Omarsket",
+  "version": "0.1.0",
+  "author": "CommanderTurtle",
+  "license": "AGPL-3.0-only",
+  "description": "Local Wayland tasks, key sequences and cursor paths.",
+  "kinds": ["service", "bar-widget"],
+  "keepLoaded": true,
+  "entryPoints": {"service": "qml/Service.qml", "barWidget": "qml/Panel.qml"},
+  "dependencies": [
+    {"name":"wtype","package":"wtype","why":"Wayland keyboard input"},
+    {"name":"wl-copy","package":"wl-clipboard","why":"Paste actions"},
+    {"name":"zenity","package":"zenity","why":"Task and data file selection"},
+    {"name":"wayland-info","package":"wayland-utils","why":"Wayland capability checks"},
+    {"name":"grim","package":"grim","why":"Screenshot actions"}
+  ],
+  "barWidget": {
+    "displayName": "Omarsket", "category": "Productivity",
+    "aliases": ["macro", "tasks", "automation", "tasket"],
+    "allowMultiple": false, "defaultSection": "right"
+  }
+}
