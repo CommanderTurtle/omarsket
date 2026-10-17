@@ -112,6 +112,34 @@ class RuntimeTests(unittest.TestCase):
         self.assertLess(time.monotonic() - start, 1)
         self.assertTrue(all(j["state"] == "stopped" for j in self.session.ok("snapshot")["jobs"]))
 
+    def test_controller_metadata_and_restart_guard(self):
+        self.save("pending", [dict(type="wait", duration=0)], delay_seconds=60)
+        first = self.session.ok("run", name="pending")
+        self.assertEqual(first["delay_seconds"], 60)
+        self.assertGreater(first["created_ms"], 0)
+        self.assertEqual(first["session"], self.session.ok("snapshot")["session"])
+        self.session.close()
+        self.session = Session(self.folder)
+        second = self.session.ok("run", name="pending")
+        self.assertEqual(first["number"], second["number"])
+        self.assertNotEqual(first["session"], second["session"])
+        self.assertFalse(self.session.call("stop", number=second["number"], session=first["session"])["ok"])
+        self.assertEqual(self.session.ok("snapshot")["jobs"][0]["state"], "scheduled")
+        self.session.ok("stop", number=second["number"], session=second["session"])
+
+    def test_task_validation_has_no_side_effects(self):
+        task = dict(id="validation", actions=[dict(type="wait", duration=0)])
+        self.session.ok("validate-task", task=task)
+        self.assertEqual(self.session.ok("snapshot")["tasks"], [])
+        self.assertFalse(self.session.call("validate-task", task=dict(id="bad", actions=[dict(type="wait", duration=-1)]))["ok"])
+
+    def test_tasket_import_keeps_http_delay(self):
+        path = self.folder / "timed.scht"
+        path.write_text(json.dumps(dict(docType="ScheduleTask File", http_delay=7, delay=2,
+                                        actions=[dict(type="wait", duration=0)])), encoding="utf-8")
+        self.session.ok("import", name="timed", path=str(path))
+        self.assertEqual(self.session.ok("snapshot")["tasks"][0]["delay_seconds"],7)
+
     def test_rejects_cycles_and_unapproved_commands(self):
         self.save("cycle", [dict(type="runningothertask", otherTaskName="cycle")])
         self.assertFalse(self.session.call("run", name="cycle")["ok"])

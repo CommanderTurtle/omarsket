@@ -24,6 +24,7 @@ pub fn now_ms() -> u64 {
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Job {
+    pub session: String,
     pub number: u64,
     pub task: String,
     pub state: String,
@@ -34,6 +35,11 @@ pub struct Job {
     pub temporary: bool,
     pub total_actions: usize,
     pub loop_times: i64,
+    pub created_ms: u64,
+    pub started_ms: Option<u64>,
+    pub finished_ms: Option<u64>,
+    pub delay_seconds: u64,
+    pub description: String,
     #[serde(skip)]
     pub cancel: Arc<AtomicBool>,
     #[serde(skip)]
@@ -93,6 +99,7 @@ impl Plan {
 }
 type Emitter = Arc<dyn Fn(Value) + Send + Sync>;
 pub struct Engine {
+    pub session: String,
     pub store: Mutex<Store>,
     pub jobs: Mutex<Vec<Job>>,
     path: PathBuf,
@@ -105,6 +112,14 @@ pub struct Engine {
 impl Engine {
     pub fn new(path: PathBuf, dry_run: bool, emit: Emitter) -> Result<Arc<Self>> {
         Ok(Arc::new(Self {
+            session: format!(
+                "{}-{}",
+                std::process::id(),
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_nanos()
+            ),
             store: Mutex::new(Store::load(&path)?),
             jobs: Mutex::new(vec![]),
             path,
@@ -117,7 +132,7 @@ impl Engine {
     }
     pub fn snapshot(&self) -> Value {
         let store = self.store.lock().unwrap();
-        json!({"tasks":store.tasks.values().collect::<Vec<_>>(),"data":store.data,"jobs":*self.jobs.lock().unwrap(),"dry_run":self.dry_run,"directory":root_path(&self.path),"notices":store.notices,"preferences":store.preferences})
+        json!({"session":self.session,"tasks":store.tasks.values().collect::<Vec<_>>(),"data":store.data,"jobs":*self.jobs.lock().unwrap(),"dry_run":self.dry_run,"directory":root_path(&self.path),"notices":store.notices,"preferences":store.preferences})
     }
     fn changed(&self) {
         (self.emit)(json!({"event":"jobs","jobs":*self.jobs.lock().unwrap()}));
@@ -131,6 +146,8 @@ impl Engine {
         let result = f(&mut next)?;
         next.save_changes(&self.path, &guard)?;
         *guard = next;
+        drop(guard);
+        (self.emit)(json!({"event":"store","snapshot":self.snapshot()}));
         Ok(result)
     }
     pub fn queue(&self, id: &str, delay: Option<u64>, repeat: Option<i64>) -> Result<Value> {
@@ -150,7 +167,9 @@ impl Engine {
         let mut guard = self.store.lock().unwrap();
         *guard = Store::load(&self.path)?;
         drop(guard);
-        Ok(self.snapshot())
+        let snapshot = self.snapshot();
+        (self.emit)(json!({"event":"store","snapshot":snapshot}));
+        Ok(snapshot)
     }
     pub fn queue_task(&self, task: Task, temporary: bool) -> Result<Value> {
         let store = self.store.lock().unwrap();
@@ -169,6 +188,7 @@ impl Engine {
             jobs.retain(|j| ["scheduled", "running"].contains(&j.state.as_str()));
         }
         let job = Job {
+            session: self.session.clone(),
             number: self.next.fetch_add(1, Ordering::Relaxed),
             task: task.id.clone(),
             state: "scheduled".into(),
@@ -179,6 +199,11 @@ impl Engine {
             temporary,
             total_actions: task.actions.len(),
             loop_times: task.loop_times,
+            created_ms: now_ms(),
+            started_ms: None,
+            finished_ms: None,
+            delay_seconds: task.delay_seconds,
+            description: task.description.clone(),
             cancel: Arc::new(AtomicBool::new(false)),
             plan: Some(plan),
         };
@@ -196,6 +221,7 @@ impl Engine {
             {
                 job.cancel.store(true, Ordering::Relaxed);
                 job.state = "stopped".into();
+                job.finished_ms = Some(now_ms());
                 job.plan = None;
             }
         }
@@ -292,6 +318,7 @@ impl Engine {
             match next {
                 Some(job) => {
                     job.state = "running".into();
+                    job.started_ms = Some(now_ms());
                     Some(job.clone())
                 }
                 None => None,
@@ -305,6 +332,7 @@ impl Engine {
         });
         self.update(job.number, |j| {
             j.plan = None;
+            j.finished_ms = Some(now_ms());
             if j.cancel.load(Ordering::Relaxed) || self.shutdown.load(Ordering::Relaxed) {
                 j.state = "stopped".into();
             } else {

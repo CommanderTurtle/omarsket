@@ -54,6 +54,12 @@ fn request(engine: &Arc<Engine>, r: &Value) -> Result<Value> {
     match string(r, "method")? {
         "snapshot" => Ok(engine.snapshot()),
         "reload" => engine.reload(),
+        "validate-task" => {
+            let task: Task =
+                serde_json::from_value(r["task"].clone()).map_err(|e| e.to_string())?;
+            task.validate()?;
+            Ok(serde_json::to_value(task).unwrap())
+        }
         "preference" => {
             let key = string(r, "name")?;
             if !["auto_scroll", "pinned"].contains(&key) {
@@ -118,6 +124,9 @@ fn request(engine: &Arc<Engine>, r: &Value) -> Result<Value> {
             })
         }
         "stop" => {
+            if !r["session"].is_null() && r["session"] != engine.session {
+                return Err("Engine session changed; task was not stopped".into());
+            }
             engine.stop(r["number"].as_u64());
             Ok(json!(true))
         }
@@ -318,7 +327,7 @@ fn run() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.first().is_none_or(|s| s == "--help" || s == "help") {
         println!(
-            "Omarsket\n  omarsket session [--dry-run] [--directory PATH]\n  omarsket run TASK [--directory PATH]\n  omarsket validate FILE\n\nIndividual schedules: PATH/schedules/*.omscht. Legacy --library FILE migrates on open.\nSession accepts JSON-lines on stdin and returns replies/events on stdout. No network listener."
+            "Omarsket\n  omarsket session [--dry-run] [--directory PATH] [--control-socket PATH]\n  omarsket run TASK [--directory PATH]\n  omarsket validate FILE\n\nIndividual schedules: PATH/schedules/*.omscht. Legacy --library FILE migrates on open.\nSession accepts JSON-lines on stdin and returns replies/events on stdout. No TCP listener."
         );
         return Ok(());
     }
@@ -356,6 +365,20 @@ fn run() -> Result<()> {
     };
     let path = std::path::absolute(path).map_err(|e| e.to_string())?;
     let engine = Engine::new(path, args.iter().any(|a| a == "--dry-run"), emit.clone())?;
+    #[cfg(unix)]
+    let _control = if let Some(index) = args.iter().position(|a| a == "--control-socket") {
+        Some(omarsket::control::ControlServer::start(
+            PathBuf::from(args.get(index + 1).ok_or("--control-socket needs a path")?),
+            engine.clone(),
+            request,
+        )?)
+    } else {
+        None
+    };
+    #[cfg(not(unix))]
+    if args.iter().any(|a| a == "--control-socket") {
+        return Err("Control sockets require Unix".into());
+    }
     if args[0] == "run" {
         let id = args.get(1).ok_or("Expected saved task name")?;
         engine.queue(id, None, None)?;

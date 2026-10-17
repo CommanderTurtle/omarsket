@@ -266,7 +266,12 @@ impl Task {
             Self {
                 id: id.into(),
                 description: value["description"].as_str().unwrap_or("").into(),
-                delay_seconds: 0,
+                delay_seconds: value
+                    .get("http_delay")
+                    .or_else(|| value.get("delay"))
+                    .map(|v| v.as_u64().ok_or("Task delay must be a nonnegative integer"))
+                    .transpose()?
+                    .unwrap_or(0),
                 loop_times: 1,
                 auto_start: false,
                 allow_system: false,

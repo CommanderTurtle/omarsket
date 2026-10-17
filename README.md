@@ -40,6 +40,11 @@ Schedules are individual `.omscht` files under `~/.local/share/omarsket/schedule
 opening without removing originals. File provides import/export and collection
 JSON; Data manages reusable snippets. Optional runner: `bash build-runner.sh`.
 
+Local controllers can share the plugin's queue through the owner-only Unix socket
+`$XDG_RUNTIME_DIR/omarsket/control.sock`. Set the plugin setting `controlSocket:false`
+to disable it, or a private absolute path to override it. Standalone sessions opt
+in with `--control-socket PATH`. This does not enable HTTP or another input engine.
+
 ## Update / remove
 
 Disable before updating, run `omarchy plugin update io.github.commanderturtle.omarsket`,
