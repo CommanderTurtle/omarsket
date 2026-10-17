@@ -3,6 +3,11 @@ use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
 pub type Result<T> = std::result::Result<T, String>;
+pub fn task_name(name: &str) -> &str {
+    name.strip_suffix(".omscht")
+        .or_else(|| name.strip_suffix(".scht"))
+        .unwrap_or(name)
+}
 fn one() -> u32 {
     1
 }
@@ -136,7 +141,7 @@ impl Action {
                 delay,
                 repeat,
             } => {
-                valid_id(name.trim_end_matches(".scht"))?;
+                valid_id(task_name(name))?;
                 loops(*repeat)?;
                 if *delay > 86400 {
                     return Err("Task delay exceeds 24 hours".into());

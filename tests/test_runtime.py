@@ -154,5 +154,157 @@ class RuntimeTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertIn("Omarsket-only", result["error"])
 
+    def restart(self):
+        self.session.close()
+        self.session = Session(self.folder)
+
+    def test_individual_files_only_rewrite_changed_schedule(self):
+        self.save("a")
+        self.save("b")
+        a, b = (self.folder / "schedules" / f"{name}.omscht" for name in ("a", "b"))
+        before = b.stat().st_mtime_ns
+        self.save("a", description="changed")
+        self.assertEqual(json.loads(a.read_text(encoding="utf-8"))["description"], "changed")
+        self.assertEqual(b.stat().st_mtime_ns, before)
+        self.assertFalse((self.folder / "library.json").exists())
+        self.session.ok("delete", name="a")
+        self.assertFalse(a.exists())
+        self.assertTrue(b.exists())
+
+    def test_scht_auto_conversion_preserves_source_and_does_not_resurrect(self):
+        source = self.folder / "schedules" / "legacy.scht"
+        original = json.dumps(dict(docType="ScheduleTask File", actions=[dict(type="wait", duration=0)],
+                                   auto_start=True, allow_system=True))
+        source.write_text(original, encoding="utf-8")
+        self.restart()
+        native = source.with_suffix(".omscht")
+        self.assertTrue(native.is_file())
+        task = self.session.ok("snapshot")["tasks"][0]
+        self.assertFalse(task["auto_start"])
+        self.assertFalse(task["allow_system"])
+        self.assertEqual(self.session.ok("snapshot")["jobs"], [])
+        self.assertEqual(source.read_text(encoding="utf-8"), original)
+        self.session.ok("delete", name="legacy")
+        self.restart()
+        self.assertEqual(self.session.ok("snapshot")["tasks"], [])
+        self.assertFalse(native.exists())
+
+    def test_legacy_library_migrates_once_and_keeps_existing_schedules(self):
+        self.save("existing", description="newer")
+        legacy = dict(tasks={
+            "existing": dict(id="existing", description="old", actions=[]),
+            "old": dict(id="old", delay_seconds=10, loop_times=2, actions=[dict(type="wait", duration=0)])},
+            data={"text": dict(kind="paste", value="saved data")})
+        original = json.dumps(legacy)
+        (self.folder / "library.json").write_text(original, encoding="utf-8")
+        self.restart()
+        s = self.session.ok("snapshot")
+        self.assertEqual({t["id"] for t in s["tasks"]}, {"existing", "old"})
+        self.assertEqual(next(t for t in s["tasks"] if t["id"] == "existing")["description"], "newer")
+        self.assertEqual(s["data"]["text"]["value"], "saved data")
+        self.assertTrue((self.folder / "data.json").exists())
+        self.session.ok("delete", name="old")
+        self.restart()
+        self.assertEqual([t["id"] for t in self.session.ok("snapshot")["tasks"]], ["existing"])
+        self.assertEqual((self.folder / "library.json").read_text(encoding="utf-8"), original)
+
+    def test_rename_updates_native_and_tasket_nested_references(self):
+        self.save("child")
+        self.save("parent", [dict(type="runningothertask", otherTaskName="child.omscht")])
+        child = next(t for t in self.session.ok("snapshot")["tasks"] if t["id"] == "child")
+        child["id"] = "renamed"
+        self.session.ok("save", task=child, previous="child")
+        self.assertFalse((self.folder / "schedules/child.omscht").exists())
+        self.assertTrue((self.folder / "schedules/renamed.omscht").exists())
+        parent = next(t for t in self.session.ok("snapshot")["tasks"] if t["id"] == "parent")
+        self.assertEqual(parent["actions"][0]["otherTaskName"], "renamed")
+        self.session.ok("run", name="parent")
+        self.assertFalse(self.session.call("duplicate", name="parent", new_name="renamed")["ok"])
+        self.session.ok("duplicate", name="parent", new_name="copy")
+        self.assertTrue((self.folder / "schedules/copy.omscht").exists())
+
+    def test_temporary_schedule_does_not_save_or_change_saved_task(self):
+        self.save("saved")
+        before = (self.folder / "schedules/saved.omscht").read_bytes()
+        job = self.session.ok("run-temporary", task=dict(id="scratch", delay_seconds=60,
+                              loop_times=5, actions=[dict(type="wait", duration=0)]))
+        self.assertTrue(job["temporary"])
+        self.assertEqual(job["loop_times"], 5)
+        self.assertEqual(job["total_actions"], 1)
+        self.assertFalse((self.folder / "schedules/scratch.omscht").exists())
+        self.assertEqual((self.folder / "schedules/saved.omscht").read_bytes(), before)
+        self.session.ok("stop", number=job["number"])
+
+    def test_native_export_embeds_shared_data_and_reimport_resets_permissions(self):
+        self.session.ok("save-data", name="text", item=dict(kind="paste", value="resolved"))
+        self.save("native", [dict(type="paste", content="fallback", contentId="text")],
+                  auto_start=True, allow_system=True, delay_seconds=3, loop_times=4)
+        out = self.folder / "portable.omscht"
+        self.session.ok("export", name="native", format="omarsket", path=str(out))
+        self.assertEqual(json.loads(out.read_text(encoding="utf-8"))["actions"][0]["content"], "resolved")
+        self.session.ok("import", name="imported", path=str(out))
+        task = next(t for t in self.session.ok("snapshot")["tasks"] if t["id"] == "imported")
+        self.assertEqual(task["delay_seconds"], 3)
+        self.assertEqual(task["loop_times"], 4)
+        self.assertFalse(task["auto_start"])
+        self.assertFalse(task["allow_system"])
+
+    def test_collection_roundtrip_remains_individual_and_no_overwrite(self):
+        self.save("one", auto_start=True, allow_system=True)
+        self.save("two")
+        self.session.ok("save-data", name="shared", item=dict(kind="paste", value="portable"))
+        out = self.folder / "collection.json"
+        self.session.ok("export-library", path=str(out))
+        self.assertFalse(self.session.call("import-library", path=str(out))["ok"])
+        other = self.folder / "other"
+        other.mkdir()
+        s = Session(other)
+        try:
+            s.ok("import-library", path=str(out))
+            self.assertEqual(len(list((other / "schedules").glob("*.omscht"))), 2)
+            self.assertFalse((other / "library.json").exists())
+            self.assertFalse(any(t["auto_start"] or t["allow_system"] for t in s.ok("snapshot")["tasks"]))
+        finally:
+            s.close()
+
+    def test_folder_import_is_validated_before_any_write(self):
+        folder = self.folder / "imports"
+        folder.mkdir()
+        (folder / "good.scht").write_text(json.dumps(dict(docType="ScheduleTask File", actions=[])), encoding="utf-8")
+        bad = folder / "bad.omscht"
+        bad.write_text("invalid", encoding="utf-8")
+        self.assertFalse(self.session.call("import-folder", path=str(folder))["ok"])
+        self.assertEqual(self.session.ok("snapshot")["tasks"], [])
+        bad.write_text(json.dumps(dict(id="ignored", actions=[])), encoding="utf-8")
+        self.assertEqual(self.session.ok("import-folder", path=str(folder))["imported"], 2)
+        self.assertEqual({p.stem for p in (self.folder / "schedules").glob("*.omscht")}, {"good", "bad"})
+
+    def test_external_edit_is_not_silently_overwritten(self):
+        self.save("external")
+        path = self.folder / "schedules/external.omscht"
+        original = json.loads(path.read_text(encoding="utf-8"))
+        changed = dict(original, description="outside")
+        path.write_text(json.dumps(changed), encoding="utf-8")
+        self.assertIn("changed on disk", self.session.call("save", task=dict(original, description="inside"))["error"])
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["description"], "outside")
+        self.assertEqual(self.session.ok("reload")["tasks"][0]["description"], "outside")
+
+    def test_native_file_with_omitted_defaults_can_be_edited(self):
+        path = self.folder / "schedules/minimal.omscht"
+        path.write_text(json.dumps(dict(id="minimal", actions=[])), encoding="utf-8")
+        self.restart()
+        self.save("minimal", description="editable")
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["description"], "editable")
+
+    def test_preferences_persist_without_touching_schedules(self):
+        self.save()
+        path = self.folder / "schedules/test.omscht"
+        before = path.stat().st_mtime_ns
+        self.session.ok("preference", name="auto_scroll", value=False)
+        self.assertFalse(self.session.call("preference", name="unknown", value=True)["ok"])
+        self.restart()
+        self.assertFalse(self.session.ok("snapshot")["preferences"]["auto_scroll"])
+        self.assertEqual(path.stat().st_mtime_ns, before)
+
 
 if __name__ == "__main__": unittest.main()

@@ -1,8 +1,8 @@
 use omarsket::{
     backend::Backend,
     engine::Engine,
-    model::{Result, Snippet, Task, valid_id},
-    store::data_path,
+    model::{Action, Result, Snippet, Task, task_name, valid_id},
+    store::{Store, data_path, read_json as read_file_json},
 };
 use serde_json::{Value, json};
 use std::{
@@ -28,13 +28,13 @@ fn string<'a>(request: &'a Value, key: &str) -> Result<&'a str> {
         .ok_or_else(|| format!("Missing string: {key}"))
 }
 fn read_json(path: &str) -> Result<Value> {
-    let f = fs::File::open(path).map_err(|e| e.to_string())?;
-    if f.metadata().map_err(|e| e.to_string())?.len() > 16 * 1024 * 1024 {
-        return Err("Import exceeds 16 MiB".into());
-    }
-    serde_json::from_reader(f).map_err(|e| e.to_string())
+    read_file_json(std::path::Path::new(path))
 }
 fn export_file(path: &str, value: &Value) -> Result<Value> {
+    let bytes = serde_json::to_vec_pretty(value).map_err(|e| e.to_string())?;
+    if bytes.len() > 16 * 1024 * 1024 {
+        return Err("Export exceeds the 16 MiB import limit; export schedules individually".into());
+    }
     let mut options = fs::OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]
@@ -43,17 +43,49 @@ fn export_file(path: &str, value: &Value) -> Result<Value> {
         options.mode(0o600);
     }
     let mut file = options.open(path).map_err(|e| e.to_string())?;
-    file.write_all(serde_json::to_string_pretty(value).unwrap().as_bytes())
-        .map_err(|e| e.to_string())?;
+    if let Err(error) = file.write_all(&bytes).and_then(|_| file.sync_all()) {
+        drop(file);
+        let _ = fs::remove_file(path);
+        return Err(error.to_string());
+    }
     Ok(json!({"path":path}))
 }
 fn request(engine: &Arc<Engine>, r: &Value) -> Result<Value> {
     match string(r, "method")? {
         "snapshot" => Ok(engine.snapshot()),
+        "reload" => engine.reload(),
+        "preference" => {
+            let key = string(r, "name")?;
+            if !["auto_scroll", "pinned"].contains(&key) {
+                return Err("Unknown preference".into());
+            }
+            let value = r["value"].as_bool().ok_or("Expected boolean preference")?;
+            engine.edit(|s| {
+                s.preferences.insert(key.into(), value);
+                Ok(json!(true))
+            })
+        }
         "save" => {
             let t: Task = serde_json::from_value(r["task"].clone()).map_err(|e| e.to_string())?;
             t.validate()?;
             engine.edit(|s| {
+                if let Some(old) = r["previous"].as_str().filter(|old| *old != t.id) {
+                    if s.tasks.contains_key(&t.id) {
+                        return Err("Schedule name already exists".into());
+                    }
+                    s.tasks.remove(old).ok_or("Original schedule not found")?;
+                    for task in s.tasks.values_mut() {
+                        for action in &mut task.actions {
+                            if let Action::Task { name, .. } = action
+                                && task_name(name) == old
+                            {
+                                *name = t.id.clone();
+                            }
+                        }
+                    }
+                } else if r["create"] == true && s.tasks.contains_key(&t.id) {
+                    return Err("Schedule name already exists".into());
+                }
                 s.tasks.insert(t.id.clone(), t);
                 Ok(json!(true))
             })
@@ -66,6 +98,25 @@ fn request(engine: &Arc<Engine>, r: &Value) -> Result<Value> {
             })
         }
         "run" => engine.queue(string(r, "name")?, r["delay"].as_u64(), r["loop"].as_i64()),
+        "run-temporary" => {
+            let t: Task = serde_json::from_value(r["task"].clone()).map_err(|e| e.to_string())?;
+            engine.queue_task(t, true)
+        }
+        "duplicate" => {
+            let old = string(r, "name")?;
+            let name = string(r, "new_name")?;
+            valid_id(name)?;
+            engine.edit(|s| {
+                if s.tasks.contains_key(name) {
+                    return Err("Schedule name already exists".into());
+                }
+                let mut t = s.tasks.get(old).ok_or("Schedule not found")?.clone();
+                t.id = name.into();
+                t.auto_start = false;
+                s.tasks.insert(name.into(), t);
+                Ok(json!(true))
+            })
+        }
         "stop" => {
             engine.stop(r["number"].as_u64());
             Ok(json!(true))
@@ -86,7 +137,11 @@ fn request(engine: &Arc<Engine>, r: &Value) -> Result<Value> {
             let value = if r["format"] == "tasket" {
                 t.tasket_json(&s.data)?
             } else {
-                serde_json::to_value(t).unwrap()
+                let mut portable = t.clone();
+                for action in &mut portable.actions {
+                    *action = action.resolve(&s.data)?;
+                }
+                serde_json::to_value(portable).unwrap()
             };
             if let Some(path) = r["path"].as_str() {
                 export_file(path, &value)
@@ -113,9 +168,14 @@ fn request(engine: &Arc<Engine>, r: &Value) -> Result<Value> {
             };
             let binary = std::env::current_exe().map_err(|e| e.to_string())?;
             let text = format!(
-                "[Desktop Entry]\nType=Application\nName=Omarsket — {name}\nExec={} run {}\nIcon=input-keyboard\nTerminal=false\n",
+                "[Desktop Entry]\nType=Application\nName=Omarsket — {name}\nExec={} run {} --directory {}\nIcon=input-keyboard\nTerminal=false\n",
                 quote(&binary.to_string_lossy()),
-                quote(name)
+                quote(name),
+                quote(
+                    engine.snapshot()["directory"]
+                        .as_str()
+                        .ok_or("Invalid schedule directory")?
+                )
             );
             let mut file = fs::OpenOptions::new()
                 .write(true)
@@ -179,6 +239,64 @@ fn request(engine: &Arc<Engine>, r: &Value) -> Result<Value> {
                 Ok(json!(true))
             })
         }
+        "export-library" => {
+            let store = engine.store.lock().unwrap();
+            export_file(string(r, "path")?, &serde_json::to_value(&*store).unwrap())
+        }
+        "import-library" => {
+            let mut incoming: Store = serde_json::from_value(read_json(string(r, "path")?)?)
+                .map_err(|e| e.to_string())?;
+            incoming.validate()?;
+            for task in incoming.tasks.values_mut() {
+                task.auto_start = false;
+                task.allow_system = false;
+            }
+            engine.edit(|s| {
+                for id in incoming.tasks.keys() {
+                    if s.tasks.contains_key(id) {
+                        return Err(format!("Schedule {id} already exists"));
+                    }
+                }
+                for id in incoming.data.keys() {
+                    if s.data.contains_key(id) {
+                        return Err(format!("Data {id} already exists"));
+                    }
+                }
+                s.tasks.extend(incoming.tasks);
+                s.data.extend(incoming.data);
+                Ok(json!(true))
+            })
+        }
+        "import-folder" => {
+            let folder = std::path::Path::new(string(r, "path")?);
+            let mut incoming = Vec::new();
+            for entry in fs::read_dir(folder).map_err(|e| e.to_string())? {
+                let file = entry.map_err(|e| e.to_string())?.path();
+                if file.extension().is_none_or(|s| {
+                    !s.eq_ignore_ascii_case("scht") && !s.eq_ignore_ascii_case("omscht")
+                }) {
+                    continue;
+                }
+                let name = file
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .ok_or("Invalid filename")?;
+                incoming.push(Task::import(name, read_file_json(&file)?)?);
+            }
+            if incoming.is_empty() {
+                return Err("No .scht or .omscht files in this folder".into());
+            }
+            engine.edit(|s| {
+                let count = incoming.len();
+                for task in incoming {
+                    if s.tasks.contains_key(&task.id) {
+                        return Err(format!("Schedule {} already exists", task.id));
+                    }
+                    s.tasks.insert(task.id.clone(), task);
+                }
+                Ok(json!({"imported":count}))
+            })
+        }
         "doctor" | "cursor" => {
             let mut backend = Backend::new(false)?;
             backend.call(&json!({"type":r["method"]}), &AtomicBool::new(false))
@@ -200,7 +318,7 @@ fn run() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.first().is_none_or(|s| s == "--help" || s == "help") {
         println!(
-            "Omarsket\n  omarsket session [--dry-run] [--library PATH]\n  omarsket run TASK [--library PATH]\n  omarsket validate FILE\n\nSession accepts JSON-lines on stdin and returns replies/events on stdout. No network listener."
+            "Omarsket\n  omarsket session [--dry-run] [--directory PATH]\n  omarsket run TASK [--directory PATH]\n  omarsket validate FILE\n\nIndividual schedules: PATH/schedules/*.omscht. Legacy --library FILE migrates on open.\nSession accepts JSON-lines on stdin and returns replies/events on stdout. No network listener."
         );
         return Ok(());
     }
@@ -228,11 +346,15 @@ fn run() -> Result<()> {
             }
         })
     };
-    let path = if let Some(index) = args.iter().position(|a| a == "--library") {
-        PathBuf::from(args.get(index + 1).ok_or("--library needs a path")?)
+    let path = if let Some(index) = args
+        .iter()
+        .position(|a| a == "--directory" || a == "--library")
+    {
+        PathBuf::from(args.get(index + 1).ok_or("Storage option needs a path")?)
     } else {
         data_path()?
     };
+    let path = std::path::absolute(path).map_err(|e| e.to_string())?;
     let engine = Engine::new(path, args.iter().any(|a| a == "--dry-run"), emit.clone())?;
     if args[0] == "run" {
         let id = args.get(1).ok_or("Expected saved task name")?;

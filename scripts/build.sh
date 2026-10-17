@@ -48,10 +48,23 @@ if [[ "$MODE" == plugin ]]; then
     mkdir -p "$DEST"
     cp -R "$OUT/." "$DEST/"
     omarchy plugin validate "$DEST"
-    omarchy plugin enable io.github.commanderturtle.omarsket
-    if command -v qmllint >/dev/null; then
-      qmllint -I "${OMARCHY_PATH:-/usr/share/omarchy}/shell" "$DEST/qml/Service.qml" "$DEST/qml/Panel.qml" "$DEST/qml/ActionEditor.qml" "$DEST/qml/CodeArea.qml"
+    QMLLINT="$(command -v qmllint || true)"
+    [[ -n "$QMLLINT" ]] || QMLLINT=/usr/lib/qt6/bin/qmllint
+    if [[ -x "$QMLLINT" ]]; then
+      SHELL_DIR="${OMARCHY_PATH:-/usr/share/omarchy}/shell"
+      [[ -d "$SHELL_DIR" ]] || SHELL_DIR="$HOME/.local/share/omarchy/shell"
+      [[ -d "$SHELL_DIR/Ui" && -d "$SHELL_DIR/Commons" ]] || { echo 'Set OMARCHY_PATH to the installed shell sources for QML validation.' >&2; exit 1; }
+      # Quickshell's qs alias needs its directory layout when linting offline.
+      QML_IMPORTS="$(mktemp -d /tmp/omarsket-qml.XXXXXXXX)"
+      trap '[[ "$QML_IMPORTS" == /tmp/omarsket-qml.* ]] && rm -rf -- "$QML_IMPORTS"' EXIT
+      mkdir "$QML_IMPORTS/qs"
+      ln -s "$SHELL_DIR/Ui" "$QML_IMPORTS/qs/Ui"
+      ln -s "$SHELL_DIR/Commons" "$QML_IMPORTS/qs/Commons"
+      "$QMLLINT" -I "$QML_IMPORTS" "$DEST"/qml/*.qml
+      [[ "$QML_IMPORTS" == /tmp/omarsket-qml.* ]] && rm -rf -- "$QML_IMPORTS"
+      trap - EXIT
     fi
+    omarchy plugin enable io.github.commanderturtle.omarsket
   fi
 elif (( INSTALL )); then
   DEST="${XDG_DATA_HOME:-$HOME/.local/share}/omarsket/runner"

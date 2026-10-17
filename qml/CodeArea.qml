@@ -15,6 +15,7 @@ QQC.ScrollView {
     id: editor
     placeholderText: root.hint
     wrapMode: TextEdit.WrapAnywhere
+    textFormat: TextEdit.PlainText
     selectByMouse: true
     color: Commons.Color.foreground
     selectionColor: Qt.rgba(Commons.Color.accent.r,Commons.Color.accent.g,Commons.Color.accent.b,0.3)

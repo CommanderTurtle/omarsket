@@ -34,14 +34,25 @@ bind = SUPER SHIFT, F10, exec, omarchy-shell io.github.commanderturtle.omarsket 
 
 ## Tasks
 
-Create actions in the panel, save, and run. Tasks execute serially with delay,
+Create actions in the panel, save, and schedule. Each task has its own tab, delay,
+loop count, countdown and stop control. Temporary runs use a draft without saving
+a file. Rename/duplicate/import/export live in File; task tools include list
+duplication, rescaling, startup schedules and desktop launchers. Tasks execute serially with delay,
 finite/infinite looping, per-action repetition, nested task calls, progress and
 stop controls. Edit/reorder/duplicate actions, record keys in the focused recorder,
 capture cursor coordinates, and rescale paths for another resolution. Data stores
 reusable text, key maps and cursor paths. Startup execution is opt-in.
 
-Tasket `.scht` imports/exports retain its six action types and embedded data.
-Omarsket JSON also stores task delay, loops and permissions. Imported tasks never
+Schedules are individual `schedules/NAME.omscht` JSON files, not a live monolithic
+library. Shared snippets live in `data.json`. On opening, existing `library.json`
+is migrated and `.scht` files in `schedules/`, `saved_tasks/` or the data directory
+are converted automatically. Originals remain intact; a migration journal prevents
+deleted imports from reappearing. File also imports an external folder or transfers
+a full collection through `library.json`. Existing names are never overwritten by
+imports. Native files can be reloaded without restarting the plugin.
+
+Tasket `.scht` import/export retains its six action types and embedded data.
+`.omscht` also stores task delay, loops and permissions. Imported tasks never
 enable startup or system commands automatically. New actions such as scroll/move
 and type are Omarsket extensions, not portable back to Windows Tasket. Qt's binary
 `programData.ini` is not imported: use embedded `.scht` data or Omarsket data JSON.
@@ -53,7 +64,10 @@ Linux replacements. FN hardware keys cannot be synthesized. Hyprland monitor
 coordinates are logical desktop coordinates, including negative origins.
 
 Saved tasks/data are private files under `$XDG_DATA_HOME/omarsket` (normally
-`~/.local/share/omarsket`). Exports never overwrite an existing file. A task holds
+`~/.local/share/omarsket`). Override with `--directory PATH` or the plugin's
+`directory` setting; legacy `--library FILE` migrates that file into its containing
+directory. Files are limited to 16 MiB each. Only changed schedules are rewritten;
+edits detected on disk must be reloaded before saving. Exports never overwrite an existing file. A task holds
 one virtual input session; stop releases held input. No raw keyboard recording
 or membership in the Linux `input` group is required.
 

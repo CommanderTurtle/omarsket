@@ -1,7 +1,7 @@
 use crate::{
     backend::Backend,
-    model::{Action, Result, Task, loops},
-    store::Store,
+    model::{Action, Result, Task, loops, task_name},
+    store::{Store, root_path},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -31,6 +31,9 @@ pub struct Job {
     pub action: usize,
     pub completed_loops: u64,
     pub error: String,
+    pub temporary: bool,
+    pub total_actions: usize,
+    pub loop_times: i64,
     #[serde(skip)]
     pub cancel: Arc<AtomicBool>,
     #[serde(skip)]
@@ -73,7 +76,7 @@ impl Plan {
                 ));
             }
             if let Action::Task { name, .. } = action {
-                let id = name.trim_end_matches(".scht").to_string();
+                let id = task_name(name).to_string();
                 if children.contains_key(&id) {
                     continue;
                 }
@@ -114,7 +117,7 @@ impl Engine {
     }
     pub fn snapshot(&self) -> Value {
         let store = self.store.lock().unwrap();
-        json!({"tasks":store.tasks.values().collect::<Vec<_>>(),"data":store.data,"jobs":*self.jobs.lock().unwrap(),"dry_run":self.dry_run})
+        json!({"tasks":store.tasks.values().collect::<Vec<_>>(),"data":store.data,"jobs":*self.jobs.lock().unwrap(),"dry_run":self.dry_run,"directory":root_path(&self.path),"notices":store.notices,"preferences":store.preferences})
     }
     fn changed(&self) {
         (self.emit)(json!({"event":"jobs","jobs":*self.jobs.lock().unwrap()}));
@@ -126,13 +129,14 @@ impl Engine {
         let mut guard = self.store.lock().unwrap();
         let mut next = guard.clone();
         let result = f(&mut next)?;
-        next.save(&self.path)?;
+        next.save_changes(&self.path, &guard)?;
         *guard = next;
         Ok(result)
     }
     pub fn queue(&self, id: &str, delay: Option<u64>, repeat: Option<i64>) -> Result<Value> {
         let store = self.store.lock().unwrap();
         let mut task = store.tasks.get(id).ok_or("Task not found")?.clone();
+        drop(store);
         if let Some(repeat) = repeat {
             loops(repeat)?;
             task.loop_times = repeat;
@@ -140,6 +144,16 @@ impl Engine {
         if let Some(delay) = delay {
             task.delay_seconds = delay;
         }
+        self.queue_task(task, false)
+    }
+    pub fn reload(&self) -> Result<Value> {
+        let mut guard = self.store.lock().unwrap();
+        *guard = Store::load(&self.path)?;
+        drop(guard);
+        Ok(self.snapshot())
+    }
+    pub fn queue_task(&self, task: Task, temporary: bool) -> Result<Value> {
+        let store = self.store.lock().unwrap();
         let plan = Plan::make(&task, &store, &mut BTreeSet::new(), 0, &mut 0)?;
         drop(store);
         let mut jobs = self.jobs.lock().unwrap();
@@ -156,12 +170,15 @@ impl Engine {
         }
         let job = Job {
             number: self.next.fetch_add(1, Ordering::Relaxed),
-            task: id.into(),
+            task: task.id.clone(),
             state: "scheduled".into(),
             due_ms: now_ms() + task.delay_seconds * 1000,
             action: 0,
             completed_loops: 0,
             error: String::new(),
+            temporary,
+            total_actions: task.actions.len(),
+            loop_times: task.loop_times,
             cancel: Arc::new(AtomicBool::new(false)),
             plan: Some(plan),
         };
@@ -238,7 +255,7 @@ impl Engine {
                     } => {
                         self.wait(*delay as f64, &job.cancel)?;
                         self.execute(
-                            &plan.children[name.trim_end_matches(".scht")],
+                            &plan.children[task_name(name)],
                             *repeat,
                             backend,
                             job,
@@ -350,11 +367,7 @@ mod tests {
     use super::*;
     fn engine() -> Arc<Engine> {
         Engine::new(
-            std::env::temp_dir().join(format!(
-                "omarsket-test-{}-{}.json",
-                std::process::id(),
-                now_ms()
-            )),
+            std::env::temp_dir().join(format!("omarsket-test-{}-{}", std::process::id(), now_ms())),
             true,
             Arc::new(|_| {}),
         )

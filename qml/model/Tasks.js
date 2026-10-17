@@ -33,6 +33,20 @@ function title(a) {
   var labels = {paste:"Paste", wait:"Wait", keyssequence:"Key sequence", cursormovements:"Cursor path", systemcommand:"System command", runningothertask:"Run task", move:"Move", click:"Click", scroll:"Scroll", hotkey:"Hotkey", type:"Type"}
   return labels[a.type] || a.type
 }
+function uniqueName(names, base) {
+  var name=base, n=2
+  while (names.indexOf(name)!==-1) name=base+" "+n++
+  return name
+}
+function filename(path) { return path.split(/[\\/]/).pop().replace(/\.(omscht|scht|json)$/i, "") }
+function jobText(job, now) {
+  if (job.state==="scheduled") {
+    var seconds=Math.max(0,Math.ceil((job.due_ms-now)/1000))
+    return seconds ? "In "+seconds+"s" : "Waiting for input queue"
+  }
+  if (job.state==="running") return "Action "+(job.action+1)+"/"+job.total_actions+" · loop "+(job.completed_loops+1)+(job.loop_times<0?"/∞":"/"+job.loop_times)
+  return job.state+" · "+job.completed_loops+" loops"
+}
 function key(event) {
   var names = {16777216:"Escape",16777217:"Tab",16777219:"BackSpace",16777220:"Return",16777221:"Return",16777223:"Delete",16777232:"Home",16777233:"End",16777234:"Left",16777235:"Up",16777236:"Right",16777237:"Down",16777238:"Page_Up",16777239:"Page_Down",16777248:"shift",16777249:"ctrl",16777250:"super",16777251:"alt",32:"space"}
   if (names[event.key]) return names[event.key]
