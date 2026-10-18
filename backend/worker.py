@@ -25,6 +25,9 @@ ALIASES = {
     "NEXT_TRACK": "XF86AudioNext", "PREVIOUS_TRACK": "XF86AudioPrev",
     "PAUSE": "Pause", "DELETE": "Delete", "INSERT": "Insert", "HOME": "Home",
     "END": "End", "TAB": "Tab", "NUM_LOCK": "Num_Lock",
+    "NUMPAD_ENTER": "KP_Enter", "SPACEBAR": "space", "PRINT": "Print",
+    "+": "plus", "-": "minus", "*": "asterisk", "/": "slash",
+    ".": "period", ",": "comma",
     ";:": "semicolon", "/?": "slash", "`~": "grave", "[{": "bracketleft",
     "\\|": "backslash", "]}": "bracketright", "'\"": "apostrophe",
 }
