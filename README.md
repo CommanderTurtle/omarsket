@@ -18,7 +18,8 @@ session tools listed in the manifest. `grim` is used only by the backend's exist
 screenshot actions; it is not bundled or installed here. `zenity` is the file
 picker. `wayland-utils` is not required on Hyprland.
 
-Choose **No** at the enable prompt, then initialize and enable:
+Choose **No** at the enable prompt. Follow the [manual quick start](quick-start.md),
+or use the optional helper:
 
 ```sh
 cd ~/.config/omarchy/plugins/io.github.commanderturtle.omarsket
@@ -27,7 +28,9 @@ omarchy plugin enable io.github.commanderturtle.omarsket
 ```
 
 Initialization builds the locked Rust dependencies and installs the pinned WA fork
-from `backend/requirements.txt` into a private Python environment. Runtime files
+from `backend/requirements.txt` with `uv` into a private Python environment.
+`uv` fetches the Git revision through its cache; no WA clone is stored in the plugin
+source tree and no separate checkout is needed. Runtime files
 live in `~/.local/share/omarsket/runtime`; build files in `~/.cache/omarsket`
 (`XDG_DATA_HOME` / `XDG_CACHE_HOME` are respected). It never installs system packages, copies
 plugins or edits shell configuration. Normal startup needs no downloads.
