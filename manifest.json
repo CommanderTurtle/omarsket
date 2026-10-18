@@ -19,7 +19,6 @@
     {"name":"wtype","package":"wtype","why":"Wayland keyboard input"},
     {"name":"wl-copy","package":"wl-clipboard","why":"Paste actions"},
     {"name":"zenity","package":"zenity","why":"Task and data file selection"},
-    {"name":"wayland-info","package":"wayland-utils","why":"Wayland capability checks"},
     {"name":"grim","package":"grim","why":"Screenshot actions"},
     {"name":"xdg-open","package":"xdg-utils","why":"Open files, folders and URLs"},
     {"name":"wpctl","package":"wireplumber","why":"Audio system actions"},

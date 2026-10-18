@@ -6,13 +6,17 @@ No network listener, telemetry or separately installed service.
 
 ## Install
 
-Requires Omarchy Quattro, Hyprland and these Arch packages:
+Requires Omarchy Quattro. Additional build/file-dialog packages:
 
 ```sh
-sudo pacman -S --needed rust gcc uv python git wtype wl-clipboard zenity \
-  wayland-utils grim xdg-utils wireplumber procps-ng
+sudo pacman -S --needed rust gcc uv zenity
 omarchy plugin add https://github.com/CommanderTurtle/omarsket.git
 ```
+
+Omarchy supplies Python/Git and the Hyprland/input, clipboard, capture, audio and
+session tools listed in the manifest. `grim` is used only by the backend's existing
+screenshot actions; it is not bundled or installed here. `zenity` is the file
+picker. `wayland-utils` is not required on Hyprland.
 
 Choose **No** at the enable prompt, then initialize and enable:
 

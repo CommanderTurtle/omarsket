@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
@@ -50,6 +51,31 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(inputs.mouse.click.call_count, 2)
         worker.perform(dict(type="scroll", vertical=-2, horizontal=1), lambda: inputs)
         inputs.mouse.scroll.assert_called_once_with(-2, 1)
+
+    @patch.object(worker, "checked")
+    def test_explicit_screenshot_actions_keep_tasket_semantics(self, checked):
+        checked.return_value.stdout = b"png"
+        worker.system_action(dict(sysCommandType="printscreen"))
+        self.assertEqual(checked.call_args_list[0].args[0], ["grim", "-"])
+        self.assertEqual(checked.call_args_list[1].args[0], ["wl-copy", "--type", "image/png"])
+        self.assertEqual(checked.call_args_list[1].kwargs["input"], b"png")
+
+    def test_no_ocr_runtime_or_hyprland_wayland_info_requirement(self):
+        source = (ROOT / "backend/worker.py").read_text(encoding="utf-8")
+        self.assertNotIn("tesseract", source)
+        self.assertNotIn("paddle", source)
+        self.assertNotIn('"wayland-info"', source)
+        manifest = json.loads((ROOT / "manifest.json").read_text())
+        self.assertNotIn("wayland-info", [item["name"] for item in manifest["dependencies"]])
+
+    @patch.object(worker.time, "sleep")
+    @patch.object(worker, "checked")
+    def test_paste_uses_omarchy_clipboard_insertion_without_an_ocr_engine(self, checked, sleep):
+        inputs = Mock()
+        worker.perform(dict(type="paste", content="--copy-only\nUnicode: 🐢"), lambda: inputs)
+        checked.assert_called_once_with(["wl-copy", "--type", "text/plain;charset=utf-8"],
+                                        input="--copy-only\nUnicode: 🐢".encode())
+        inputs.keyboard.hotkey.assert_called_once_with("shift", "Insert")
 
 
 if __name__ == "__main__": unittest.main()
