@@ -17,7 +17,9 @@ Item {
   property var preferences: ({})
   property string error: ""
   property int serial: 0
+  property int operationEpoch: 0
   property var callbacks: ({})
+  signal stopping()
   readonly property string helper: (Quickshell.env("XDG_DATA_HOME") || (Quickshell.env("HOME") + "/.local/share")) + "/omarsket/runtime/bin/omarsket"
   readonly property string controlSocket: settings && settings.controlSocket === false ? "" : String((settings && settings.controlSocket) || (Quickshell.env("XDG_RUNTIME_DIR") ? Quickshell.env("XDG_RUNTIME_DIR") + "/omarsket/control.sock" : ""))
   readonly property var runtimeCommand: [helper, "session"].concat(settings && settings.directory ? ["--directory",String(settings.directory)] : []).concat(controlSocket ? ["--control-socket",controlSocket] : [])
@@ -40,7 +42,7 @@ Item {
       if (callback) callback(result, failure)
     })
   }
-  function stop() { call({method: "stop"}) }
+  function stop() { operationEpoch++;stopping();call({method: "stop"}) }
   function restart() { if (!runtime.running) { error = ""; runtime.running = true } }
   property var pickerCallback: null
   function chooseFile(save, callback, name, folder) {
@@ -71,6 +73,7 @@ Item {
       onRead: function(line) {
         var reply
         try { reply = JSON.parse(line) } catch (e) { root.error = "Invalid runtime response"; return }
+        if (reply.event === "stopping") { root.operationEpoch++;root.stopping();return }
         if (reply.event === "ready") { root.ready = true; root.apply(reply.snapshot); return }
         if (reply.event === "store") { root.apply(reply.snapshot); return }
         if (reply.event === "jobs") { root.jobs = reply.jobs; return }
@@ -85,6 +88,7 @@ Item {
     stderr: SplitParser { onRead: function(line) { root.error = line } }
     onExited: function(code) {
       root.ready = false
+      root.operationEpoch++;root.stopping()
       var callbacks = root.callbacks; root.callbacks = ({})
       for (var id in callbacks) callbacks[id](null,"Runtime stopped")
       if (code !== 0 && root.error === "") root.error = "Runtime exited (" + code + "). Rebuild or start it again."

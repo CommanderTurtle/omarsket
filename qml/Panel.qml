@@ -11,7 +11,7 @@ Ui.Panel {
   moduleName: "io.github.commanderturtle.omarsket"
   manageIpc: false
   readonly property var app: bar && bar.shell ? bar.shell.serviceFor(moduleName) : null
-  readonly property color fg: bar ? bar.foreground : Commons.Color.foreground
+  readonly property color fg: barForeground
   readonly property string face: bar ? bar.fontFamily : Style.font.family
   property string tab: "Tasks"
   property var documents: []
@@ -73,7 +73,7 @@ Ui.Panel {
     var doc=documents[index];savedName=doc.saved;draft=Tasks.copy(doc.draft);dirty=doc.dirty;selectedAction=0
   }
   function closeDocument(index,discard) {
-    if(saving)return
+    if(saving || index<0 || index>=documents.length)return
     stash()
     if(!discard && documents[index].dirty){closingIndex=index;return}
     var docs=documents.slice();docs.splice(index,1);documents=docs;documentIndex=-1;closingIndex=-1
@@ -90,7 +90,9 @@ Ui.Panel {
     })
   }
   function run(temporary) {
-    var dispatch=function(){root.pendingRun=temporary?{method:"run-temporary",task:Tasks.copy(root.draft)}:{method:"run",name:root.savedName};root.close();startRun.restart()}
+    if(!app || !app.ready || saving || pendingRun)return
+    var epoch=app.operationEpoch
+    var dispatch=function(){if(!root.app || epoch!==root.app.operationEpoch)return;root.pendingRun=temporary?{method:"run-temporary",task:Tasks.copy(root.draft)}:{method:"run",name:root.savedName};root.close();startRun.restart()}
     if(temporary)dispatch();else save(dispatch)
   }
   function ask(text,callback) {confirmText=text;confirmCallback=callback}
@@ -179,6 +181,7 @@ Ui.Panel {
   onOpenedChanged:if(opened&&app){app.refresh();if(documentIndex<0)choose("")}
   Connections {
     target: root.app
+    function onStopping(){startRun.stop();root.pendingRun=null}
     function onJobsChanged() {
       if(!root.autoScroll || !root.opened || root.tab!=="Tasks")return
       var job=root.currentJobs.find(function(j){return j.state==="running"})
@@ -196,11 +199,12 @@ Ui.Panel {
   }
   Ui.KeyboardPanel {
     id:panel;anchorItem:button;owner:dismissal;bar:root.bar;open:root.opened
-    focusTarget:taskName
+    focusTarget:root.tab==="Tasks"?taskName:panelBody
     contentWidth:panel.fittedContentWidth(Style.space(680))
     contentHeight:panel.fittedContentHeight(Style.space(850),Style.space(850))
     Column {
-      anchors.fill:parent;spacing:Style.space(8)
+      id:panelBody;anchors.fill:parent;spacing:Style.space(8)
+      Keys.onEscapePressed:root.close()
       Column {
         id:header;width:parent.width;spacing:Style.space(8)
         Ui.PanelHero {title:"Omarsket";meta:root.app&&root.app.ready?root.app.activeCount+" active":"Runtime stopped";foreground:root.fg;fontFamily:root.face}
@@ -261,7 +265,7 @@ Ui.Panel {
         Ui.PanelSeparator {foreground:root.fg}
       }
       QQC.ScrollView {
-        id:scroll;width:parent.width;height:Math.max(Style.space(100),parent.height-header.height-parent.spacing);clip:true;contentWidth:availableWidth
+        id:scroll;width:parent.width;height:Math.max(0,parent.height-header.height-parent.spacing);clip:true;contentWidth:availableWidth
         Column {
           id:content;width:scroll.availableWidth;spacing:Style.space(10)
           Text {visible:root.app&&root.app.error!=="";text:root.app?root.app.error:"";width:parent.width;wrapMode:Text.Wrap;textFormat:Text.PlainText;color:Commons.Color.urgent;font.family:root.face;font.pixelSize:Style.font.body}

@@ -25,6 +25,10 @@ test("recorded keys preserve keysyms and modifiers",()=>{
   expect(api.key({key:16777249,text:""})).toBe("ctrl");
   expect(api.key({key:16777275,text:""})).toBe("F12");
   expect(api.key({key:65,text:"A"})).toBe("a");
+  expect(api.key({key:65,text:"\x01"})).toBe("a");
+  expect(api.key({key:16777225,text:""})).toBe("Print");
+  expect(api.key({key:16777222,text:""})).toBe("Insert");
+  expect(api.key({key:0,text:""})).toBe("");
 });
 test("native manifest points to real source components",()=>{
   const manifest=JSON.parse(readFileSync(resolve(root,"manifest.json"),"utf8"));
@@ -73,7 +77,8 @@ function panelModel() {
   const names=[...script.matchAll(/^  function (\w+)\(/gm)].map(m=>m[1]);
   const scope={documents:[],documentIndex:-1,draft:api.blank("Untitled"),savedName:"",dirty:false,saving:false,
     selectedAction:0,tab:"Tasks",closingIndex:-1,confirmText:"",confirmCallback:null,
-    app:{tasks:[{...api.blank("saved"),description:"original"}],change:(req,cb)=>cb(null,"test failure")}};
+    pendingRun:null,startRun:{running:false,restart(){this.running=true}},close(){},
+    app:{ready:true,operationEpoch:0,tasks:[{...api.blank("saved"),description:"original"}],change:(req,cb)=>cb(null,"test failure")}};
   scope.root=scope;
   new Function("scope","Tasks",`with(scope){${script};Object.assign(scope,{${names.join(",")}})}`)(scope,api);
   return scope;
@@ -107,4 +112,41 @@ test("export picker keeps the intended schedule if the active tab changes",()=>{
   model.app.chooseFile=(save,cb)=>{pick=cb};model.app.call=(req)=>{request=req};
   model.exportTask("omarsket");model.choose("");pick("/tmp/output");
   expect(request.name).toBe("saved");expect(request.path).toBe("/tmp/output.omscht");
+});
+
+test("Stop during Save cannot schedule a late run",()=>{
+  const model=panelModel();model.choose("saved");
+  let respond;model.app.change=(req,cb)=>{respond=cb};
+  model.run(false);expect(model.saving).toBe(true);
+  model.app.operationEpoch++;respond(true,null);
+  expect(model.pendingRun).toBeNull();expect(model.startRun.running).toBe(false);
+  expect(model.saving).toBe(false);
+});
+
+test("temporary runs cannot be double queued during the panel close delay",()=>{
+  const model=panelModel();model.choose("saved");
+  model.run(true);const pending=model.pendingRun;
+  expect(pending.method).toBe("run-temporary");
+  model.run(true);expect(model.pendingRun).toBe(pending);
+});
+
+test("stale close requests do not discard documents",()=>{
+  const model=panelModel();model.choose("saved");
+  model.closeDocument(-1,true);model.closeDocument(99,true);
+  expect(model.documents).toHaveLength(1);expect(model.savedName).toBe("saved");
+});
+
+test("native theme and keyboard geometry stay under the shell's control",()=>{
+  const panel=readFileSync(resolve(root,"qml/Panel.qml"),"utf8");
+  const service=readFileSync(resolve(root,"qml/Service.qml"),"utf8");
+  const editor=readFileSync(resolve(root,"qml/CodeArea.qml"),"utf8");
+  expect(panel).toContain("readonly property color fg: barForeground");
+  expect(panel).toContain("Keys.onEscapePressed:root.close()");
+  expect(panel).toContain("onStopping(){startRun.stop();root.pendingRun=null}");
+  expect(service).toContain('operationEpoch++;stopping();call({method: "stop"})');
+  expect(service).toContain("root.operationEpoch++;root.stopping()");
+  expect(service).toContain('reply.event === "stopping"');
+  expect(editor).toContain("contentWidth: availableWidth");
+  expect(editor).toContain("Border.controlSpec");
+  expect(editor).toContain("Style.selectionFillFor");
 });

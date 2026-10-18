@@ -10,6 +10,7 @@ QQC.ScrollView {
   property string hint: ""
   signal edited(string value)
   implicitHeight: Style.space(125)
+  contentWidth: availableWidth
   clip: true
   QQC.TextArea {
     id: editor
@@ -18,11 +19,17 @@ QQC.ScrollView {
     textFormat: TextEdit.PlainText
     selectByMouse: true
     color: Commons.Color.foreground
-    selectionColor: Qt.rgba(Commons.Color.accent.r,Commons.Color.accent.g,Commons.Color.accent.b,0.3)
+    selectionColor: Style.selectionFillFor(Commons.Color.foreground,Commons.Color.accent)
+    selectedTextColor:Commons.Color.foreground
     placeholderTextColor: Qt.darker(Commons.Color.foreground,1.6)
     font.family: Style.font.family
     font.pixelSize: Style.font.body
-    background: Ui.BorderSurface { color: Qt.rgba(Commons.Color.foreground.r,Commons.Color.foreground.g,Commons.Color.foreground.b,0.04); radius:Style.cornerRadius }
+    readonly property var fieldBorder:Border.controlSpec(activeFocus?"focus":hovered?"hover-cursor":"normal",Commons.Color.foreground,Commons.Color.accent)
+    leftPadding:Style.spacing.controlPaddingX+Border.left(fieldBorder)
+    rightPadding:Style.spacing.controlPaddingX+Border.right(fieldBorder)
+    topPadding:Style.spacing.inputPaddingY+Border.top(fieldBorder)
+    bottomPadding:Style.spacing.inputPaddingY+Border.bottom(fieldBorder)
+    background: Ui.BorderSurface { color:Style.controlFill(editor.activeFocus,editor.hovered,Commons.Color.foreground,Commons.Color.accent);borderSpec:editor.fieldBorder; radius:Style.cornerRadius }
     onTextChanged: if (activeFocus) root.edited(text)
   }
 }

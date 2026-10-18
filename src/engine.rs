@@ -225,6 +225,9 @@ impl Engine {
                 job.plan = None;
             }
         }
+        if number.is_none() {
+            (self.emit)(json!({"event":"stopping"}));
+        }
         self.wake.notify_all();
         self.changed();
     }
@@ -462,5 +465,31 @@ mod tests {
         e.stop(None);
         runner.join().unwrap();
         assert_eq!(e.jobs.lock().unwrap()[0].state, "stopped");
+    }
+    #[test]
+    fn external_stop_notifies_the_panel_to_cancel_delayed_runs() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let sink = events.clone();
+        let e = Engine::new(
+            std::env::temp_dir().join(format!(
+                "omarsket-stop-event-{}-{}",
+                std::process::id(),
+                now_ms()
+            )),
+            true,
+            Arc::new(move |event| sink.lock().unwrap().push(event)),
+        )
+        .unwrap();
+        e.stop(Some(1));
+        assert!(
+            !events
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|e| e["event"] == "stopping")
+        );
+        events.lock().unwrap().clear();
+        e.stop(None);
+        assert_eq!(events.lock().unwrap()[0]["event"], "stopping");
     }
 }

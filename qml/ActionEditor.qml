@@ -154,7 +154,7 @@ Column {
     Text {anchors.centerIn:parent;textFormat:Text.PlainText;text:recorder.recording ? "Recording · click to finish" : "Record keys in this field";color:Commons.Color.foreground;font.family:Style.font.family;font.pixelSize:Style.font.body}
     MouseArea {anchors.fill:parent;onClicked:{if(recorder.recording){recorder.finish()}else{recorder.events=({});recorder.down=({});recorder.start=Date.now();recorder.recording=true;recorder.forceActiveFocus()}}}
     Keys.priority:Keys.BeforeItem
-    Keys.onPressed:function(event){if(!recording)return;event.accepted=true;if(event.isAutoRepeat)return;var k=Tasks.key(event);if(down[k]===undefined)down[k]=Date.now()-start}
+    Keys.onPressed:function(event){if(!recording)return;event.accepted=true;if(event.isAutoRepeat)return;var k=Tasks.key(event);if(k&&down[k]===undefined)down[k]=Date.now()-start}
     Keys.onReleased:function(event){if(!recording)return;event.accepted=true;var k=Tasks.key(event);if(down[k]===undefined)return;var at=down[k];while(events[String(at)]!==undefined)at++;events[String(at)]=[Math.max(0,Date.now()-start-down[k]),[k]];delete down[k]}
     onActiveFocusChanged:if(!activeFocus&&recording)finish()
   }
