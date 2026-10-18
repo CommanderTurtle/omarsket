@@ -3,6 +3,7 @@ import qs.Commons
 import qs.Commons as Commons
 import qs.Ui as Ui
 import "model/Tasks.js" as Tasks
+import "model/Bindings.js" as Bindings
 
 Column {
   id:root
@@ -27,22 +28,26 @@ Column {
   property bool disableKey:false
   property var modifiers:[]
   property double authorizingUntil:0
+  property string pendingStart:""
+  readonly property var bindingWarnings:Bindings.profileWarnings(profile,service.nativeBindings,service.nativeKeymap)
+  readonly property var savedWarnings:Bindings.profileWarnings(book.profiles.find(function(p){return p.name===root.selected})||{},service.nativeBindings,service.nativeKeymap)
   readonly property var device:profile.devices[deviceIndex]||null
   readonly property bool starting:Date.now()<authorizingUntil&&!book.active
   spacing:Style.space(8)
   function call(request,callback){var owner=root;request.method="input-router";service.call(request,function(v,e){if(!owner||!owner.alive)return;owner.error=e||"";if(callback)callback(v,e)})}
   function load(first){if(loading)return;loading=true;call({action:"snapshot"},function(v,e){root.loading=false;if(!e){root.book=v;if(first&&!root.settingTouched&&v.active)root.optIn=true;if(v.error){root.error=v.error;root.authorizingUntil=0}}})}
-  function choose(name){selected=name;editing=false;previous=book.profiles.find(function(p){return p.name===name})||null;profile=previous?Tasks.copy(previous):{name:"",devices:[]};deviceIndex=0}
+  function choose(name){pendingStart="";selected=name;editing=false;previous=book.profiles.find(function(p){return p.name===name})||null;profile=previous?Tasks.copy(previous):{name:"",devices:[]};deviceIndex=0}
+  function start(){pendingStart="";authorizingUntil=Date.now()+120000;call({action:"start",name:selected},function(v,e){if(e)root.authorizingUntil=0;root.load()})}
   function update(key,value){var p=Tasks.copy(profile);p[key]=value;profile=p}
   function addDevice(){var found=book.devices.find(function(d){return d.path===root.devicePath});if(!found||profile.devices.some(function(d){return d.path===found.path}))return;update("devices",profile.devices.concat([{path:found.path,vendor:found.vendor,product:found.product,keys:{}}]));deviceIndex=profile.devices.length-1}
   function mapKey(){if(!device)return;var p=Tasks.copy(profile);p.devices[deviceIndex].keys[String(sourceCode)]=disableKey?[]:modifiers.concat([targetCode]).filter(function(k,i,a){return a.indexOf(k)===i});profile=p}
   function removeKey(code){var p=Tasks.copy(profile);delete p.devices[deviceIndex].keys[code];profile=p}
   function save(){if(loading)return;loading=true;var saved=Tasks.copy(profile);call({action:"save",profile:saved,expected:previous&&previous.name===saved.name?previous:null},function(v,e){root.loading=false;if(!e){root.book=v;root.choose(saved.name)}})}
-  Component.onCompleted:load(true)
+  Component.onCompleted:{load(true);service.inputConfigCommand({action:"snapshot",file:"bindings.lua"},function(){})}
   Component.onDestruction:{alive=false;if(root.starting)service.call({method:"input-router",action:"stop"})}
   Timer {interval:1000;repeat:true;running:root.optIn&&(!!root.book.active||Date.now()<root.authorizingUntil);onTriggered:root.load()}
   Text {text:"ts_uinput · native touch / pass-through";textFormat:Text.PlainText;color:Commons.Color.foreground;font.family:Style.font.family;font.pixelSize:Style.font.caption}
-  Ui.Toggle {label:"Enable virtual keyboard/mouse layer";checked:root.optIn;onClicked:{root.settingTouched=true;if(checked){root.call({action:"stop"},function(){root.load()});root.optIn=false;root.authorizingUntil=0;root.editing=false}else{root.optIn=true;root.load()}}}
+  Ui.Toggle {label:"Enable virtual keyboard/mouse layer";checked:root.optIn;onClicked:{root.settingTouched=true;root.pendingStart="";if(checked){root.call({action:"stop"},function(){root.load()});root.optIn=false;root.authorizingUntil=0;root.editing=false}else{root.optIn=true;root.load()}}}
   Column {
     visible:root.optIn;width:parent.width;spacing:Style.space(8)
     Text {visible:!root.book.helper;width:parent.width;wrapMode:Text.Wrap;text:"Initialize the optional input helper in quick-start.md.";textFormat:Text.PlainText;color:Commons.Color.urgent;font.family:Style.font.family;font.pixelSize:Style.font.caption}
@@ -85,9 +90,17 @@ Column {
     }
     Flow {
       width:parent.width;spacing:Style.space(6)
-      Ui.Button {text:"Start · authorize";enabled:root.book.helper&&!root.editing&&!root.book.active&&!root.starting&&root.selected!=="ts_uinput"&&root.selected!=="";onClicked:{root.authorizingUntil=Date.now()+120000;root.call({action:"start",name:root.selected},function(v,e){if(e)root.authorizingUntil=0;root.load()})}}
+      Ui.Button {text:"Start · authorize";enabled:root.book.helper&&!root.editing&&!root.book.active&&!root.starting&&root.selected!=="ts_uinput"&&root.selected!=="";onClicked:{if(root.savedWarnings.length)root.pendingStart=root.selected;else root.start()}}
       Ui.Button {text:"Stop";enabled:!!root.book.active||Date.now()<root.authorizingUntil;onClicked:root.call({action:"stop"},function(){root.authorizingUntil=0;root.load()})}
       Ui.Button {text:"Refresh";onClicked:root.load()}
+    }
+    Text {width:parent.width;visible:root.bindingWarnings.length>0;wrapMode:Text.Wrap;text:root.bindingWarnings.join("\n");textFormat:Text.PlainText;color:Commons.Color.urgent;font.family:Style.font.family;font.pixelSize:Style.font.caption}
+    Column {width:parent.width;visible:root.pendingStart!=="";spacing:Style.space(6)
+      Text {width:parent.width;wrapMode:Text.Wrap;text:"This profile changes keys used by native bindings. Continue to authorization? Native bindings will not be removed.";textFormat:Text.PlainText;color:Commons.Color.urgent;font.family:Style.font.family;font.pixelSize:Style.font.body}
+      Row {spacing:Style.space(8)
+        Ui.Button {text:"Continue";onClicked:if(root.pendingStart===root.selected)root.start()}
+        Ui.Button {text:"Cancel";onClicked:root.pendingStart=""}
+      }
     }
     Text {visible:!!root.book.active;text:root.book.active?root.book.active.profile+" · active · Esc+Backspace+Enter to stop":"";textFormat:Text.PlainText;color:Commons.Color.accent;font.family:Style.font.family;font.pixelSize:Style.font.caption}
   }

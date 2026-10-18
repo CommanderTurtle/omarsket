@@ -26,21 +26,38 @@ Column {
   property string description:""
   property string search:""
   property bool recording:false
-  readonly property var collisions:Bindings.conflicts(chord?[{chord:chord}]:[],service.nativeBindings,service.nativeKeymap)
+  property var pendingReplacement:null
+  property bool alive:true
+  readonly property var collisions:chord?Bindings.conflicts([{chord:chord}],service.nativeBindings,service.nativeKeymap).concat(Bindings.draftConflicts(chord,draft,service.nativeKeymap)):[]
   readonly property var routingWarnings:Bindings.routingWarnings(chord,service.nativeRouting,service.nativeKeymap)
   spacing:Style.space(8)
   function load(){
-    var token=++generation;loading=true;editing=false;defaults=false;recording=false
-    service.inputConfigCommand({action:"snapshot",file:configFile},function(v,e){if(token!==root.generation)return;root.loading=false;root.error=e||"";if(!e){root.nativeState=v;root.draft=v.text}})
+    var token=++generation;loading=true;editing=false;defaults=false;recording=false;pendingReplacement=null
+    service.inputConfigCommand({action:"snapshot",file:configFile},function(v,e){if(!root.alive||token!==root.generation)return;root.loading=false;root.error=e||"";if(!e){root.nativeState=v;root.draft=v.text}})
   }
   function find(text){var at=draft.indexOf(text);if(at>=0){defaults=false;editor.input.forceActiveFocus();editor.input.select(at,at+text.length)}else error="Defined in Omarchy's defaults; edit the native override below."}
   function begin(){if(nativeState.privileged){service.inputConfigCommand({action:"admin-edit",file:configFile},function(v,e){root.error=e||""});return}defaults=false;editing=true}
   function save(){
     loading=true;var token=++generation
-    service.inputConfigCommand({action:"save",file:configFile,expected:nativeState.text,text:draft},function(v,e){if(token!==root.generation)return;root.loading=false;root.error=e||"";if(!e){root.nativeState=v;root.draft=v.text;root.editing=false}})
+    service.inputConfigCommand({action:"save",file:configFile,expected:nativeState.text,text:draft},function(v,e){if(!root.alive||token!==root.generation)return;root.loading=false;root.error=e||"";if(!e){root.nativeState=v;root.draft=v.text;root.editing=false}})
+  }
+  function appendBinding(){
+    try {
+      var text=Bindings.replacement(chord,kind,target,description,collisions,draft+"\n"+(nativeState.defaults||""))
+      error=""
+      if(collisions.length)pendingReplacement={draft:draft,text:text,request:JSON.stringify([chord,kind,target,description]),signature:JSON.stringify(collisions),labels:collisions.map(function(b){return Bindings.nativeChord(b)+" · "+(b.description||b.dispatcher)}).join("\n")}
+      else draft+="\n"+text+"\n"
+    }catch(e){error=e.message}
+  }
+  function confirmReplacement(){
+    var pending=pendingReplacement;pendingReplacement=null
+    if(!pending||!editing)return
+    if(draft!==pending.draft||JSON.stringify(collisions)!==pending.signature||JSON.stringify([chord,kind,target,description])!==pending.request){error="Bindings changed; review the conflict again";return}
+    draft+="\n"+pending.text+"\n"
   }
   onLayerChanged:{kind=layer==="macro"?"schedule":"command";target="";if(service)load()}
   Component.onCompleted:load()
+  Component.onDestruction:{alive=false;generation++}
   Keys.onPressed:function(event){
     if(!recording)return;event.accepted=true
     if(event.key===Qt.Key_Escape){recording=false;return}
@@ -59,15 +76,15 @@ Column {
     width:parent.width;spacing:Style.space(8)
     Ui.Dropdown {label:"File";options:["bindings.lua","input.lua"];value:root.configFile;enabled:!root.editing&&!root.loading;onChanged:function(v){root.configFile=v;root.load()}}
     Ui.Button {text:"Edit";iconText:"󰏫";enabled:!root.editing&&!root.loading;onClicked:root.begin()}
-    Ui.Button {text:"Save";iconText:"󰆓";enabled:root.editing&&!root.loading;onClicked:root.save()}
-    Ui.Button {text:"Cancel";visible:root.editing;onClicked:{root.draft=root.nativeState.text;root.editing=false}}
+    Ui.Button {text:"Save";iconText:"󰆓";enabled:root.editing&&!root.loading&&!root.pendingReplacement;onClicked:root.save()}
+    Ui.Button {text:"Cancel";visible:root.editing;onClicked:{root.pendingReplacement=null;root.draft=root.nativeState.text;root.editing=false}}
     Ui.Button {text:"Reload";enabled:!root.editing&&!root.loading;onClicked:root.load()}
     Ui.Button {text:"Default";enabled:!root.editing;onClicked:root.defaults=!root.defaults}
   }
   Text {width:parent.width;wrapMode:Text.Wrap;text:root.nativeState.path||"";textFormat:Text.PlainText;color:Commons.Color.foreground;font.family:Style.font.family;font.pixelSize:Style.font.caption}
   CodeArea {id:editor;width:parent.width;implicitHeight:Style.space(260);readOnly:!root.editing||root.defaults;text:root.defaults?String(root.nativeState.defaults||""):root.draft;onEdited:function(v){root.draft=v}}
   Column {
-    visible:root.editing&&root.configFile==="bindings.lua";width:parent.width;spacing:Style.space(8)
+    visible:root.editing&&root.configFile==="bindings.lua";enabled:!root.loading;width:parent.width;spacing:Style.space(8)
     Ui.TextField {width:parent.width;placeholderText:"Chord";text:root.chord;onTextEdited:root.chord=text}
     Ui.Button {text:root.recording?"Press a chord (Escape cancels)":"Record chord";onClicked:{root.recording=!root.recording;if(root.recording)root.forceActiveFocus()}}
     Ui.Dropdown {label:"Action";options:root.layer==="macro"?["schedule","hotkey","profile"]:["command","text"];value:root.kind;onChanged:function(v){root.kind=v;root.target=""}}
@@ -77,7 +94,15 @@ Column {
     Ui.TextField {width:parent.width;placeholderText:"Description";text:root.description;onTextEdited:root.description=text}
     Text {visible:root.collisions.length>0;width:parent.width;wrapMode:Text.Wrap;text:root.collisions.map(function(b){return Bindings.nativeChord(b)+" · "+(b.description||b.dispatcher)}).join("\n");textFormat:Text.PlainText;color:Commons.Color.urgent;font.family:Style.font.family;font.pixelSize:Style.font.caption}
     Text {visible:root.routingWarnings.length>0;width:parent.width;wrapMode:Text.Wrap;text:root.routingWarnings.join("\n");textFormat:Text.PlainText;color:Commons.Color.urgent;font.family:Style.font.family;font.pixelSize:Style.font.caption}
-    Ui.Button {text:"Append binding";enabled:root.chord.trim()!==""&&root.target.trim()!==""&&!root.collisions.length;onClicked:{try{root.draft+="\n"+Bindings.line(root.chord,root.kind,root.target,root.description)+"\n";root.error=""}catch(e){root.error=e.message}}}
+    Ui.Button {text:root.collisions.length?"Review replacement…":"Append binding";enabled:root.chord.trim()!==""&&root.target.trim()!==""&&!root.pendingReplacement;onClicked:root.appendBinding()}
+    Column {
+      width:parent.width;visible:!!root.pendingReplacement;spacing:Style.space(6)
+      Text {width:parent.width;wrapMode:Text.Wrap;text:root.pendingReplacement?"Already bound:\n"+root.pendingReplacement.labels+"\nReplace these bindings? This unbinds their exact native chords, including press/release and submap variants. Changes apply only on Save.":"";textFormat:Text.PlainText;color:Commons.Color.urgent;font.family:Style.font.family;font.pixelSize:Style.font.body}
+      Row {spacing:Style.space(8)
+        Ui.Button {text:"Replace bindings";onClicked:root.confirmReplacement()}
+        Ui.Button {text:"Keep existing";onClicked:root.pendingReplacement=null}
+      }
+    }
   }
   Text {visible:root.error!=="";width:parent.width;wrapMode:Text.Wrap;text:root.error;textFormat:Text.PlainText;color:Commons.Color.urgent;font.family:Style.font.family;font.pixelSize:Style.font.caption}
   Ui.TextField {width:parent.width;placeholderText:"Find active bindings";text:root.search;onTextEdited:root.search=text}

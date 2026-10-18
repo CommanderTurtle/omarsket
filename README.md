@@ -38,6 +38,9 @@ For an unpublished WA checkout, set `WA_SOURCE=/absolute/path/to/Wayland-automat
 
 ## Use
 
+The [Tasket / Omarsket parity tables](docs/feature-parity.md) list every audited
+menu, action and keyboard layer, including remaining differences.
+
 Click the bar icon, create a schedule, add actions, save and schedule it. Right-click
 the icon to stop all runs. Tools checks input capabilities. Imported schedules
 require explicit permission for system commands and startup execution.

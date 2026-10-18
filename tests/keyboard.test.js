@@ -3,7 +3,68 @@ import { readFileSync } from "node:fs"
 import { runInNewContext } from "node:vm"
 const base=new URL("../qml/",import.meta.url)
 const K=runInNewContext(readFileSync(new URL("model/Keyboard.js",base),"utf8")+"\n({layout,mouse,maximum,normalized})")
-const B=runInNewContext(readFileSync(new URL("model/Bindings.js",base),"utf8")+"\n({chord,nativeChord,conflicts,physical,line,lua,routingWarnings})")
+const B=runInNewContext(readFileSync(new URL("model/Bindings.js",base),"utf8")+"\n({chord,nativeChord,conflicts,physical,line,lua,routingWarnings,sourceChords,replacement,draftConflicts,profileWarnings})")
+
+test("virtual input warnings cover source, target and changed modifier bindings",()=>{
+  const native=[{key:"f",modmask:64,description:"Files"},{key:"g",modmask:4,description:"Other"}]
+  const map={codes:{f:[41],g:[42]}}
+  expect(B.profileWarnings({devices:[{path:"kbd",keys:{33:[34]}}]},native,map)).toHaveLength(2)
+  expect(B.profileWarnings({devices:[{path:"kbd",keys:{125:[]}}]},native,map)[0]).toContain("Files")
+  expect(B.profileWarnings({devices:[]},native,map)).toEqual([])
+  const ui=readFileSync(new URL("InputRouter.qml",base),"utf8")
+  expect(ui).toContain('if(root.savedWarnings.length)root.pendingStart=root.selected')
+  expect(ui).toContain('Native bindings will not be removed.')
+})
+
+test("conflict replacement uses original native chord order, not a recreated callback",()=>{
+  const source='o.bind("SUPER + SHIFT + E", "Browser", function() launch_browser() end, { repeating = true })'
+  const active=[{key:"E",modmask:65,description:"Browser"}]
+  const text=B.replacement("SHIFT + SUPER + code:26","command","terminal","Shell",active,source)
+  expect(text).toStartWith('hl.unbind("SUPER + SHIFT + E")\n')
+  expect(text).toContain('o.bind("SHIFT + SUPER + code:26", "Shell", "terminal")')
+  expect(text).not.toContain("launch_browser")
+  expect(()=>B.replacement("SUPER+E","command","x","",active,"")).toThrow("Exact native chord unavailable")
+  expect(B.draftConflicts("SUPER+code:26",'o.bind("SUPER + e", "New", "x")',{codes:{e:[26]}})).toHaveLength(1)
+})
+
+test("literal chord extraction skips comments, strings and dynamic Lua expressions",()=>{
+  const source=`-- o.bind("SUPER + A", "comment", "x")
+--[=[ o.bind("SUPER + B", "comment", "x") ]=]
+local text = 'o.bind("SUPER + C", "text", "x")'
+local other = [[o.bind("SUPER + D", "text", "x")]]
+o.bind(prefix .. "E", "dynamic", "x")
+o.bind_hold('CTRL + SUPER + F', "Press", down, "Release", up)
+hl.bind("SUPER + code:42", callback)
+o.rebind("SUPER + G", "G", { launch="thing" })`
+  expect(B.sourceChords(source)).toEqual(["CTRL + SUPER + F","SUPER + code:42","SUPER + G"])
+})
+
+test("collision confirmation stages edits and keeps native authorization and theme",()=>{
+  const panel=readFileSync(new URL("Bindings.qml",base),"utf8")
+  expect(panel).toContain("Already bound:")
+  expect(panel).toContain('text:"Replace bindings"')
+  expect(panel).toContain('text:"Keep existing"')
+  expect(panel).toContain('JSON.stringify(collisions)!==pending.signature')
+  expect(panel).toContain("Commons.Color.urgent")
+  expect(panel).toContain("root.nativeState.text")
+})
+
+test("replacement needs confirmation and rejects edits made after the prompt",()=>{
+  const qml=readFileSync(new URL("Bindings.qml",base),"utf8")
+  const methods=qml.slice(qml.indexOf("  function appendBinding()"),qml.indexOf("  onLayerChanged:"))
+  const state={draft:"-- user config",editing:true,chord:"SUPER+SHIFT+E",kind:"command",target:"terminal",description:"Shell",error:"",pendingReplacement:null,nativeState:{defaults:'o.bind("SUPER + SHIFT + E", "Browser", browser_callback)'},collisions:[{key:"E",modmask:65,description:"Browser"}]}
+  const fn=new Function("root","Bindings",`with(root){${methods};return {appendBinding,confirmReplacement}}`)(state,B)
+  fn.appendBinding()
+  expect(state.draft).toBe("-- user config")
+  expect(state.pendingReplacement.labels).toContain("Browser")
+  state.target="changed after prompt";fn.confirmReplacement()
+  expect(state.draft).toBe("-- user config")
+  expect(state.error).toContain("review the conflict again")
+  fn.appendBinding();fn.confirmReplacement()
+  expect(state.draft).toContain('hl.unbind("SUPER + SHIFT + E")')
+  expect(state.draft).toContain('"changed after prompt"')
+  expect(state.pendingReplacement).toBeNull()
+})
 test("full-size physical layout includes numpad, media, Fn, Copilot and side buttons",()=>{
   const keys=K.layout()
   expect(keys.length).toBeGreaterThanOrEqual(104)

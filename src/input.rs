@@ -206,10 +206,40 @@ fn snapshot(file: &str) -> Result<Value> {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("/usr/share/omarchy"));
     let default_path = omarchy.join("config/hypr").join(file);
-    let defaults = fs::read_to_string(default_path).unwrap_or_default();
+    let mut defaults = fs::read_to_string(default_path).unwrap_or_default();
+    if file == "bindings.lua" {
+        // Read the actual packaged bindings, not just the personal-file template.
+        read_binding_sources(&omarchy.join("default/hypr/bindings"), &mut defaults);
+    }
     Ok(
         json!({"path":path,"text":if admin{String::new()}else{contents(&path)?},"privileged":admin,"defaults":defaults,"bindings":ipc("binds").unwrap_or(json!([])),"keymap":keymap(),"routing":crate::remap::active_profile()}),
     )
+}
+fn read_binding_sources(dir: &Path, out: &mut String) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    let mut paths: Vec<_> = entries.flatten().map(|e| e.path()).collect();
+    paths.sort();
+    for path in paths {
+        if out.len() >= 1024 * 1024 {
+            break;
+        }
+        let Ok(meta) = fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if meta.is_dir() {
+            read_binding_sources(&path, out);
+        } else if meta.is_file()
+            && path.extension().is_some_and(|e| e == "lua")
+            && meta.len() <= 256 * 1024
+            && let Ok(text) = fs::read_to_string(&path)
+            && out.len() + text.len() < 1024 * 1024
+        {
+            out.push('\n');
+            out.push_str(&text);
+        }
+    }
 }
 pub fn request(r: &Value) -> Result<Value> {
     let _guard = UPDATE.lock().map_err(|_| "Input editor stopped")?;
