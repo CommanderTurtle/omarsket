@@ -21,6 +21,15 @@ function identities(value,keymap) {
   return [prefix+key.toLowerCase()].concat(aliases.map(function(code){return prefix+"code:"+code}))
 }
 function overlaps(a,b,keymap) {var keys=identities(a,keymap);return identities(b,keymap).some(function(key){return keys.indexOf(key)>=0})}
+function routingWarnings(value,routing,keymap) {
+  if(!value||!routing)return []
+  var codes=identities(value,keymap).map(function(v){return v.split("|").pop()}),warnings=[]
+  ;(routing.devices||[]).forEach(function(d){Object.keys(d.keys).forEach(function(source){
+    var target=d.keys[source]
+    if(codes.indexOf("code:"+(Number(source)+8))>=0||target.some(function(code){return codes.indexOf("code:"+(code+8))>=0}))warnings.push(d.path+": "+source+" → "+(target.length?target.join(" + "):"disabled"))
+  })})
+  return warnings
+}
 function conflicts(bindings,nativeBindings,keymap) {
   return nativeBindings.filter(function(b){return (!b.submap||b.submap_universal===true||b.submap_universal==="true")&&bindings.some(function(d){return overlaps(d.chord,nativeChord(b),keymap)})})
 }

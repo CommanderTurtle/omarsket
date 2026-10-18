@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs"
 import { runInNewContext } from "node:vm"
 const base=new URL("../qml/",import.meta.url)
 const K=runInNewContext(readFileSync(new URL("model/Keyboard.js",base),"utf8")+"\n({layout,mouse,maximum,normalized})")
-const B=runInNewContext(readFileSync(new URL("model/Bindings.js",base),"utf8")+"\n({chord,nativeChord,conflicts,physical,line,lua})")
+const B=runInNewContext(readFileSync(new URL("model/Bindings.js",base),"utf8")+"\n({chord,nativeChord,conflicts,physical,line,lua,routingWarnings})")
 test("full-size physical layout includes numpad, media, Fn, Copilot and side buttons",()=>{
   const keys=K.layout()
   expect(keys.length).toBeGreaterThanOrEqual(104)
@@ -43,6 +43,13 @@ test("heatmap colors are normalized independently of stored weighted averages",(
   expect(K.normalized(session)).toEqual(session.values)
   expect(K.maximum(session.values)).toBe(.25)
   expect(K.maximum({})).toBeGreaterThan(0)
+})
+test("native binding warnings account for active physical-input remaps",()=>{
+  const routing={devices:[{path:"keyboard",keys:{33:[34]}}]},keymap={codes:{f:[41],g:[42]}}
+  expect(B.routingWarnings("SUPER+F",routing,keymap)).toEqual(["keyboard: 33 → 34"])
+  expect(B.routingWarnings("SUPER+code:42",routing,keymap)).toHaveLength(1)
+  expect(B.routingWarnings("SUPER+code:43",routing,keymap)).toHaveLength(0)
+  expect(B.routingWarnings("SUPER+F",null,keymap)).toHaveLength(0)
 })
 test("one HTTP health check, then native aggregate IPC only while the panel is visible",()=>{
   const source=readFileSync(new URL("Service.qml",base),"utf8")

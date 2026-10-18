@@ -62,6 +62,7 @@ pub fn atomic_json(path: &Path, value: &Value) -> Result<()> {
         std::process::id(),
         TEMP_ID.fetch_add(1, Ordering::Relaxed)
     ));
+    let mut created = false;
     let result = (|| {
         let mut options = fs::OpenOptions::new();
         options.create_new(true).write(true);
@@ -71,11 +72,12 @@ pub fn atomic_json(path: &Path, value: &Value) -> Result<()> {
             options.mode(0o600);
         }
         let mut file = options.open(&temp).map_err(|e| e.to_string())?;
+        created = true;
         file.write_all(&bytes).map_err(|e| e.to_string())?;
         file.sync_all().map_err(|e| e.to_string())?;
         fs::rename(&temp, path).map_err(|e| e.to_string())
     })();
-    if result.is_err() {
+    if result.is_err() && created {
         let _ = fs::remove_file(&temp);
     }
     result

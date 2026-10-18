@@ -30,6 +30,8 @@ mkdir -p "$OUT/bin" "$OUT/backend"
 # Rename rather than overwrite an executable that may still be running.
 install -m 755 "$CACHE/target/release/omarsket" "$OUT/bin/omarsket.new"
 mv -f -- "$OUT/bin/omarsket.new" "$OUT/bin/omarsket"
+install -m 755 "$CACHE/target/release/omarsket-input" "$OUT/bin/omarsket-input.new"
+mv -f -- "$OUT/bin/omarsket-input.new" "$OUT/bin/omarsket-input"
 install -m 644 "$ROOT/backend/worker.py" "$OUT/backend/worker.py"
 install -m 644 "$ROOT/backend/keymap.py" "$OUT/backend/keymap.py"
 uv venv --python "$(command -v python3)" --allow-existing "$OUT/backend/.venv"

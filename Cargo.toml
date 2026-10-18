@@ -2,9 +2,18 @@
 name = "omarsket"
 version = "0.1.0"
 edition = "2024"
+default-run = "omarsket"
 license = "AGPL-3.0-only"
 repository = "https://github.com/CommanderTurtle/omarsket"
 description = "Native Omarchy task automation with a Wayland-automation input backend"
+
+[[bin]]
+name = "omarsket"
+path = "src/main.rs"
+
+[[bin]]
+name = "omarsket-input"
+path = "src/input_main.rs"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

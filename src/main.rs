@@ -54,6 +54,8 @@ fn request(engine: &Arc<Engine>, r: &Value) -> Result<Value> {
     match string(r, "method")? {
         "snapshot" => Ok(engine.snapshot()),
         "input-config" => omarsket::input::request(r),
+        "input-router" => omarsket::remap::request(&data_path()?.join("input-profiles"), r),
+        "hardware-infer" => omarsket::hardware::infer(r),
         "reload" => engine.reload(),
         "validate-task" => {
             let task: Task =

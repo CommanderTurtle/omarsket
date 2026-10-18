@@ -208,7 +208,7 @@ fn snapshot(file: &str) -> Result<Value> {
     let default_path = omarchy.join("config/hypr").join(file);
     let defaults = fs::read_to_string(default_path).unwrap_or_default();
     Ok(
-        json!({"path":path,"text":if admin{String::new()}else{contents(&path)?},"privileged":admin,"defaults":defaults,"bindings":ipc("binds").unwrap_or(json!([])),"keymap":keymap()}),
+        json!({"path":path,"text":if admin{String::new()}else{contents(&path)?},"privileged":admin,"defaults":defaults,"bindings":ipc("binds").unwrap_or(json!([])),"keymap":keymap(),"routing":crate::remap::active_profile()}),
     )
 }
 pub fn request(r: &Value) -> Result<Value> {

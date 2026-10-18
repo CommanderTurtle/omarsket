@@ -28,7 +28,8 @@ Item {
   property var heatmapQueue: []
   property var nativeBindings: []
   property var nativeKeymap: ({})
-  function inputConfigCommand(request,callback){request.method="input-config";call(request,function(v,e){if(!e&&v.bindings){root.nativeBindings=v.bindings;root.nativeKeymap=v.keymap||{}}if(callback)callback(v,e)})}
+  property var nativeRouting: null
+  function inputConfigCommand(request,callback){request.method="input-config";call(request,function(v,e){if(!e&&v.bindings){root.nativeBindings=v.bindings;root.nativeKeymap=v.keymap||{};root.nativeRouting=v.routing||null}if(callback)callback(v,e)})}
   readonly property string macrohelp: (Quickshell.env("XDG_DATA_HOME")||Quickshell.env("HOME")+"/.local/share")+"/macrohelp/overlay/bin/macrohelpctl"
   signal stopping()
   function openHeatmap() {

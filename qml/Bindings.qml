@@ -27,6 +27,7 @@ Column {
   property string search:""
   property bool recording:false
   readonly property var collisions:Bindings.conflicts(chord?[{chord:chord}]:[],service.nativeBindings,service.nativeKeymap)
+  readonly property var routingWarnings:Bindings.routingWarnings(chord,service.nativeRouting,service.nativeKeymap)
   spacing:Style.space(8)
   function load(){
     var token=++generation;loading=true;editing=false;defaults=false;recording=false
@@ -75,6 +76,7 @@ Column {
     Ui.TextField {visible:["profile","command","text"].indexOf(root.kind)>=0;width:parent.width;placeholderText:root.kind==="profile"?"Macrohelp preset name":root.kind==="text"?"Text / character":"Command";text:root.target;onTextEdited:root.target=text}
     Ui.TextField {width:parent.width;placeholderText:"Description";text:root.description;onTextEdited:root.description=text}
     Text {visible:root.collisions.length>0;width:parent.width;wrapMode:Text.Wrap;text:root.collisions.map(function(b){return Bindings.nativeChord(b)+" · "+(b.description||b.dispatcher)}).join("\n");textFormat:Text.PlainText;color:Commons.Color.urgent;font.family:Style.font.family;font.pixelSize:Style.font.caption}
+    Text {visible:root.routingWarnings.length>0;width:parent.width;wrapMode:Text.Wrap;text:root.routingWarnings.join("\n");textFormat:Text.PlainText;color:Commons.Color.urgent;font.family:Style.font.family;font.pixelSize:Style.font.caption}
     Ui.Button {text:"Append binding";enabled:root.chord.trim()!==""&&root.target.trim()!==""&&!root.collisions.length;onClicked:{try{root.draft+="\n"+Bindings.line(root.chord,root.kind,root.target,root.description)+"\n";root.error=""}catch(e){root.error=e.message}}}
   }
   Text {visible:root.error!=="";width:parent.width;wrapMode:Text.Wrap;text:root.error;textFormat:Text.PlainText;color:Commons.Color.urgent;font.family:Style.font.family;font.pixelSize:Style.font.caption}
