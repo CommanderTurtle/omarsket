@@ -7,6 +7,8 @@ import qs.Ui as Ui
 QQC.ScrollView {
   id: root
   property alias text: editor.text
+  property alias readOnly: editor.readOnly
+  property alias input: editor
   property string hint: ""
   signal edited(string value)
   implicitHeight: Style.space(125)

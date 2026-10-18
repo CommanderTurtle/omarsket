@@ -20,7 +20,7 @@ is required. Run these commands in a terminal; leave the plugin disabled until s
    mkdir -p "$omarsket_runtime/bin" "$omarsket_runtime/backend"
    install -m 755 "$omarsket_cache/target/release/omarsket" "$omarsket_runtime/bin/omarsket.new"
    mv -f -- "$omarsket_runtime/bin/omarsket.new" "$omarsket_runtime/bin/omarsket"
-   install -m 644 backend/worker.py "$omarsket_runtime/backend/worker.py"
+   install -m 644 backend/worker.py backend/keymap.py "$omarsket_runtime/backend/"
    uv venv --python "$(command -v python3)" --allow-existing "$omarsket_runtime/backend/.venv"
    uv pip install --python "$omarsket_runtime/backend/.venv/bin/python" -r backend/requirements.txt
    ```

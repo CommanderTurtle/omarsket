@@ -53,6 +53,7 @@ fn export_file(path: &str, value: &Value) -> Result<Value> {
 fn request(engine: &Arc<Engine>, r: &Value) -> Result<Value> {
     match string(r, "method")? {
         "snapshot" => Ok(engine.snapshot()),
+        "input-config" => omarsket::input::request(r),
         "reload" => engine.reload(),
         "validate-task" => {
             let task: Task =

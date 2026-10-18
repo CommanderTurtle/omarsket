@@ -50,6 +50,8 @@ function jobText(job, now) {
 function key(event) {
   var names = {16777216:"Escape",16777217:"Tab",16777219:"BackSpace",16777220:"Return",16777221:"Return",16777222:"Insert",16777223:"Delete",16777225:"Print",16777232:"Home",16777233:"End",16777234:"Left",16777235:"Up",16777236:"Right",16777237:"Down",16777238:"Page_Up",16777239:"Page_Down",16777248:"shift",16777249:"ctrl",16777250:"super",16777251:"alt",32:"space"}
   if (names[event.key]) return names[event.key]
+  var media={16777328:"XF86AudioLowerVolume",16777329:"XF86AudioMute",16777330:"XF86AudioRaiseVolume",16777344:"XF86AudioPlay",16777345:"XF86AudioStop",16777346:"XF86AudioPrev",16777347:"XF86AudioNext",16777349:"XF86AudioPause",16777350:"XF86AudioPlay"}
+  if(media[event.key])return media[event.key]
   if (event.key >= 16777264 && event.key <= 16777298) return "F" + (event.key-16777263)
   return String(event.key>=33&&event.key<=126?String.fromCharCode(event.key):event.text||"").toLowerCase()
 }

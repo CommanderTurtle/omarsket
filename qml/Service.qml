@@ -19,7 +19,57 @@ Item {
   property int serial: 0
   property int operationEpoch: 0
   property var callbacks: ({})
+  property bool heatmapChecked: false
+  property bool heatmapConnected: false
+  property bool heatmapVisible: false
+  property bool heatmapAvailable: false
+  property string heatmapError: ""
+  property var heatmapState: ({version:1,active:null,sessions:[]})
+  property var heatmapQueue: []
+  property var nativeBindings: []
+  property var nativeKeymap: ({})
+  function inputConfigCommand(request,callback){request.method="input-config";call(request,function(v,e){if(!e&&v.bindings){root.nativeBindings=v.bindings;root.nativeKeymap=v.keymap||{}}if(callback)callback(v,e)})}
+  readonly property string macrohelp: (Quickshell.env("XDG_DATA_HOME")||Quickshell.env("HOME")+"/.local/share")+"/macrohelp/overlay/bin/macrohelpctl"
   signal stopping()
+  function openHeatmap() {
+    if(heatmapChecked)return
+    heatmapChecked=true
+    health.command=[macrohelp,"health"].concat(settings&&settings.macrohelpEnvFile?["--env",String(settings.macrohelpEnvFile)]:[])
+    health.running=true
+  }
+  function heatmapCommand(request) {
+    heatmapQueue.push(JSON.stringify(request))
+    nextHeatmap()
+  }
+  function nextHeatmap() {
+    if(bridge.running||!heatmapConnected||!heatmapQueue.length)return
+    bridge.command=["omarchy-shell","-q","io.github.commanderturtle.macrohelp","heatmap",heatmapQueue.shift()]
+    bridge.running=true
+  }
+  Timer {id:heatmapRefresh;interval:1000;repeat:true;running:root.heatmapConnected&&root.heatmapVisible;onTriggered:{if(!bridge.running&&!root.heatmapQueue.length)root.heatmapCommand({action:"snapshot"})}}
+  Process {
+    id:health
+    stdout:StdioCollector {id:healthOutput;waitForEnd:true}
+    onExited:function(code){
+      var ok=false;try{ok=code===0&&!!JSON.parse(String(healthOutput.text))}catch(e){}
+      root.heatmapConnected=ok
+      root.heatmapError=ok?"":"failed to connect to macrohelp"
+      if(ok)root.heatmapCommand({action:"snapshot"})
+    }
+  }
+  Process {
+    id:bridge
+    stdout:StdioCollector {id:bridgeOutput;waitForEnd:true}
+    onExited:function(code){
+      try{
+        if(code!==0)throw Error("failed to connect to macrohelp")
+        var reply=JSON.parse(String(bridgeOutput.text))
+        if(reply.state){root.heatmapState=reply.state;root.heatmapAvailable=!!reply.available;root.heatmapError=reply.error||""}
+        else if(reply.error)root.heatmapError=reply.error
+      }catch(e){root.heatmapError="failed to connect to macrohelp"}
+      root.nextHeatmap()
+    }
+  }
   readonly property string helper: (Quickshell.env("XDG_DATA_HOME") || (Quickshell.env("HOME") + "/.local/share")) + "/omarsket/runtime/bin/omarsket"
   readonly property string controlSocket: settings && settings.controlSocket === false ? "" : String((settings && settings.controlSocket) || (Quickshell.env("XDG_RUNTIME_DIR") ? Quickshell.env("XDG_RUNTIME_DIR") + "/omarsket/control.sock" : ""))
   readonly property var runtimeCommand: [helper, "session"].concat(settings && settings.directory ? ["--directory",String(settings.directory)] : []).concat(controlSocket ? ["--control-socket",controlSocket] : [])

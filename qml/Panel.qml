@@ -14,6 +14,7 @@ Ui.Panel {
   readonly property color fg: barForeground
   readonly property string face: bar ? bar.fontFamily : Style.font.family
   property string tab: "Tasks"
+  onTabChanged:if(app)app.heatmapVisible=opened&&tab==="Keyboard"
   property var documents: []
   property int documentIndex: -1
   property var draft: Tasks.blank("Untitled")
@@ -178,7 +179,7 @@ Ui.Panel {
   Timer {id:startRun;interval:300;onTriggered:if(root.app&&root.pendingRun){root.app.call(root.pendingRun);root.pendingRun=null}}
   Timer {interval:1000;running:root.opened;repeat:true;onTriggered:root.clock=Date.now()}
   QtObject {id:dismissal;function close(){if(!root.pinned)root.close()}}
-  onOpenedChanged:if(opened&&app){app.refresh();if(documentIndex<0)choose("")}
+  onOpenedChanged:if(app){app.heatmapVisible=opened&&tab==="Keyboard";if(opened){app.refresh();if(documentIndex<0)choose("")}}
   Connections {
     target: root.app
     function onStopping(){startRun.stop();root.pendingRun=null}
@@ -259,6 +260,7 @@ Ui.Panel {
             }
           }
           Repeater {model:["Tasks","Data","History"];Ui.Button {required property string modelData;text:modelData;foreground:root.tab===modelData?Commons.Color.accent:root.fg;onClicked:root.tab=modelData}}
+          Ui.Button {text:"Keyboard";iconText:"󰌌";foreground:root.tab==="Keyboard"?Commons.Color.accent:root.fg;onClicked:root.tab="Keyboard"}
           Ui.Button {text:"Stop all";iconText:"󰓛";onClicked:if(root.app)root.app.stop()}
           Ui.Button {text:"×";tooltipText:"Hide panel";onClicked:root.close()}
         }
@@ -270,6 +272,7 @@ Ui.Panel {
           id:content;width:scroll.availableWidth;spacing:Style.space(10)
           Text {visible:root.app&&root.app.error!=="";text:root.app?root.app.error:"";width:parent.width;wrapMode:Text.Wrap;textFormat:Text.PlainText;color:Commons.Color.urgent;font.family:root.face;font.pixelSize:Style.font.body}
           Ui.Button {visible:root.app&&!root.app.ready;text:"Start runtime";onClicked:root.app.restart()}
+          Loader {width:parent.width;active:root.tab==="Keyboard"&&!!root.app;sourceComponent:Component {InputLayers {width:parent.width;service:root.app}}}
           Flow {
             visible:root.closingIndex>=0;width:parent.width;spacing:Style.space(8)
             Text {textFormat:Text.PlainText;text:"Unsaved schedule";color:root.fg;font.family:root.face;font.pixelSize:Style.font.body}

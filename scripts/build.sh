@@ -31,6 +31,7 @@ mkdir -p "$OUT/bin" "$OUT/backend"
 install -m 755 "$CACHE/target/release/omarsket" "$OUT/bin/omarsket.new"
 mv -f -- "$OUT/bin/omarsket.new" "$OUT/bin/omarsket"
 install -m 644 "$ROOT/backend/worker.py" "$OUT/backend/worker.py"
+install -m 644 "$ROOT/backend/keymap.py" "$OUT/backend/keymap.py"
 uv venv --python "$(command -v python3)" --allow-existing "$OUT/backend/.venv"
 WA_PIN=83b7e61ce0eaefae061d9550362c7ae0a71e2318
 if [[ -n ${WA_SOURCE:-} ]]; then
