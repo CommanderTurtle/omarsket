@@ -8,7 +8,7 @@ import "model/Tasks.js" as Tasks
 Column {
   id:root
   required property var service
-  required property string layer
+  required property string bindingLayer
   property string configFile:"bindings.lua"
   property var nativeState: ({})
   property string draft:""
@@ -21,7 +21,7 @@ Column {
   property var modifiers:[]
   property string keyId:""
   property string chord:""
-  property string kind:layer==="macro"?"schedule":"command"
+  property string kind:bindingLayer==="macro"?"schedule":"command"
   property string target:""
   property string description:""
   property string search:""
@@ -55,7 +55,7 @@ Column {
     if(draft!==pending.draft||JSON.stringify(collisions)!==pending.signature||JSON.stringify([chord,kind,target,description])!==pending.request){error="Bindings changed; review the conflict again";return}
     draft+="\n"+pending.text+"\n"
   }
-  onLayerChanged:{kind=layer==="macro"?"schedule":"command";target="";if(service)load()}
+  onBindingLayerChanged:{kind=bindingLayer==="macro"?"schedule":"command";target="";if(service)load()}
   Component.onCompleted:load()
   Component.onDestruction:{alive=false;generation++}
   Keys.onPressed:function(event){
@@ -87,7 +87,7 @@ Column {
     visible:root.editing&&root.configFile==="bindings.lua";enabled:!root.loading;width:parent.width;spacing:Style.space(8)
     Ui.TextField {width:parent.width;placeholderText:"Chord";text:root.chord;onTextEdited:root.chord=text}
     Ui.Button {text:root.recording?"Press a chord (Escape cancels)":"Record chord";onClicked:{root.recording=!root.recording;if(root.recording)root.forceActiveFocus()}}
-    Ui.Dropdown {label:"Action";options:root.layer==="macro"?["schedule","hotkey","profile"]:["command","text"];value:root.kind;onChanged:function(v){root.kind=v;root.target=""}}
+    Ui.Dropdown {label:"Action";options:root.bindingLayer==="macro"?["schedule","hotkey","profile"]:["command","text"];value:root.kind;onChanged:function(v){root.kind=v;root.target=""}}
     Ui.Dropdown {visible:root.kind==="schedule";label:"Schedule";options:root.service.tasks.map(function(t){return t.id});value:root.target;onChanged:function(v){root.target=v}}
     Ui.Dropdown {visible:root.kind==="hotkey";label:"Macrohelp 0–9";options:["0","1","2","3","4","5","6","7","8","9"];value:root.target;onChanged:function(v){root.target=v}}
     Ui.TextField {visible:["profile","command","text"].indexOf(root.kind)>=0;width:parent.width;placeholderText:root.kind==="profile"?"Macrohelp preset name":root.kind==="text"?"Text / character":"Command";text:root.target;onTextEdited:root.target=text}

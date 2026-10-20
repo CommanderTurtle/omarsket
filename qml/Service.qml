@@ -145,9 +145,4 @@ Item {
       if (code !== 0 && root.error === "") root.error = "Runtime exited (" + code + "). Rebuild or start it again."
     }
   }
-  ShellIpc {
-    target: "io.github.commanderturtle.omarsket"
-    function stop(): void { root.stop() }
-    function run(name: string): void { root.call({method:"run", name:name}) }
-  }
 }

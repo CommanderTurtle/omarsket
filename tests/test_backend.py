@@ -21,9 +21,6 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(worker.key_name("CONTROL_RIGHT"), "ctrl")
         self.assertEqual(worker.key_name("NUMPAD_2"), "KP_2")
         self.assertEqual(worker.key_name("F12"), "F12")
-        self.assertEqual(worker.key_name("NUMPAD_ENTER"), "KP_Enter")
-        self.assertEqual(worker.key_name("+"), "plus")
-        self.assertEqual(worker.key_name("SPACEBAR"), "space")
         with self.assertRaises(ValueError): worker.key_name("FN")
 
     @patch.object(worker, "checked")

@@ -65,9 +65,21 @@ def checked(args, **kwargs):
                           capture_output=True, **kwargs)
 
 
+def _detect_scale():
+    """Read monitor scale once at startup. Physical = logical * scale."""
+    try:
+        result = json.loads(checked(["hyprctl", "-j", "monitors"]).stdout)
+        if isinstance(result, list) and result:
+            return float(result[0].get("scale", 1.0))
+    except Exception:
+        pass
+    return 1.0
+
+SCALE = _detect_scale()
+
 def cursor():
     result = json.loads(checked(["hyprctl", "-j", "cursorpos"]).stdout)
-    return int(result["x"]), int(result["y"])
+    return int(result["x"] * SCALE), int(result["y"] * SCALE)
 
 
 class Input:
@@ -89,18 +101,18 @@ class Input:
             self._mouse.close()
 
     def move(self, x, y, milliseconds=0):
-        x, y = int(x), int(y)
         if milliseconds:
             start_x, start_y = cursor()
             steps = max(1, math.ceil(milliseconds / 16))
             begin = time.monotonic()
             for step in range(1, steps + 1):
                 fraction = step / steps
-                self.mouse.click(round(start_x + (x - start_x) * fraction),
-                                 round(start_y + (y - start_y) * fraction), "nothing")
+                px = round(start_x + (x - start_x) * fraction)
+                py = round(start_y + (y - start_y) * fraction)
+                self.mouse.click(int(px / SCALE), int(py / SCALE), "nothing")
                 time.sleep(max(0, begin + fraction * milliseconds / 1000 - time.monotonic()))
         else:
-            self.mouse.click(x, y, "nothing")
+            self.mouse.click(int(x / SCALE), int(y / SCALE), "nothing")
 
     def timeline(self, events):
         """One wtype keyboard alongside one persistent pointer for mixed input."""
@@ -280,7 +292,7 @@ def perform(action, get_input):
         elif kind == "move": inputs.move(action["x"], action["y"], action.get("duration_ms", 0))
         elif kind == "click":
             for _ in range(action.get("count", 1)):
-                inputs.mouse.click(action["x"], action["y"], action["button"])
+                inputs.mouse.click(int(action["x"] / SCALE), int(action["y"] / SCALE), action["button"])
         elif kind == "scroll": inputs.mouse.scroll(action.get("vertical", 0), action.get("horizontal", 0))
         else: raise ValueError(f"Unknown input action: {kind}")
     return {}
