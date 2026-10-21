@@ -35,7 +35,7 @@ mv -f -- "$OUT/bin/omarsket-input.new" "$OUT/bin/omarsket-input"
 install -m 644 "$ROOT/backend/worker.py" "$OUT/backend/worker.py"
 install -m 644 "$ROOT/backend/keymap.py" "$OUT/backend/keymap.py"
 uv venv --python "$(command -v python3)" --allow-existing "$OUT/backend/.venv"
-WA_PIN=83b7e61ce0eaefae061d9550362c7ae0a71e2318
+WA_PIN=485fe1f9da3439026476bf67be31bff470818473
 if [[ -n ${WA_SOURCE:-} ]]; then
   [[ "$(git -C "$WA_SOURCE" rev-parse HEAD)" == "$WA_PIN" ]] || { echo 'WA_SOURCE must match the pinned revision in backend/requirements.txt.' >&2; exit 1; }
   [[ -z "$(git -C "$WA_SOURCE" status --porcelain)" ]] || { echo 'WA_SOURCE has uncommitted changes.' >&2; exit 1; }
