@@ -75,7 +75,7 @@ class BackendTests(unittest.TestCase):
         worker.perform(dict(type="paste", content="--copy-only\nUnicode: 🐢"), lambda: inputs)
         checked.assert_called_once_with(["wl-copy", "--type", "text/plain;charset=utf-8"],
                                         input="--copy-only\nUnicode: 🐢".encode())
-        inputs.keyboard.hotkey.assert_called_once_with("shift", "Insert")
+        inputs.keyboard.hotkey.assert_called_once_with("super", "v")
 
 
 if __name__ == "__main__": unittest.main()

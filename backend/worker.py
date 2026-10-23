@@ -283,7 +283,7 @@ def perform(action, get_input):
                     input=action.get("content", "").encode())
             # Same insertion path used by Omarchy's clipboard paste helpers.
             time.sleep(0.15)
-            inputs.keyboard.hotkey("shift", "Insert")
+            inputs.keyboard.hotkey("super", "v")
             time.sleep(0.1)  # Allow the target client to request the clipboard.
         elif kind == "type": inputs.keyboard.typewrite(action["text"], action.get("interval_ms", 0) / 1000)
         elif kind == "hotkey": inputs.keyboard.hotkey(*(key_name(k) for k in action["keys"]))
