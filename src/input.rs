@@ -211,9 +211,20 @@ fn snapshot(file: &str) -> Result<Value> {
         // Read the actual packaged bindings, not just the personal-file template.
         read_binding_sources(&omarchy.join("default/hypr/bindings"), &mut defaults);
     }
+    // Retain the existing snapshot response contract for other local clients.
+    // The UI publishes active metadata only from its serialized describe path.
     Ok(
         json!({"path":path,"text":if admin{String::new()}else{contents(&path)?},"privileged":admin,"defaults":defaults,"bindings":ipc("binds").unwrap_or(json!([])),"keymap":keymap(),"routing":crate::remap::active_profile()}),
     )
+}
+// Independent of the file editor: refreshing active contracts never reads or
+// replaces an unsaved draft, compiles Lua, reloads config, or touches devices.
+fn describe() -> Result<Value> {
+    let bindings = ipc("binds")?;
+    if !bindings.is_array() {
+        return Err("Native bindings unavailable".into());
+    }
+    Ok(json!({"bindings":bindings,"keymap":keymap(),"routing":crate::remap::active_profile()}))
 }
 fn read_binding_sources(dir: &Path, out: &mut String) {
     let Ok(entries) = fs::read_dir(dir) else {
@@ -246,6 +257,9 @@ pub fn request(r: &Value) -> Result<Value> {
     #[cfg(unix)]
     if unsafe { libc::geteuid() } == 0 {
         return Err("Do not run the Omarsket UI as root".into());
+    }
+    if r["action"] == "describe" {
+        return describe();
     }
     let file = r["file"].as_str().unwrap_or("bindings.lua");
     let path = config_path(file)?;

@@ -8,6 +8,44 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("omarsket_worker", ROOT / "backend/worker.py")
 worker = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(worker)
+keymap_spec = importlib.util.spec_from_file_location("omarsket_keymap", ROOT / "backend/keymap.py")
+keymap = importlib.util.module_from_spec(keymap_spec)
+keymap_spec.loader.exec_module(keymap)
+
+
+class KeymapTests(unittest.TestCase):
+    def test_missing_virtual_rules_never_guess_a_default_layout(self):
+        with patch.object(keymap.C, "CDLL") as load:
+            with self.assertRaises(RuntimeError):
+                keymap.describe({"layout": "", "active_keymap": "custom"})
+            load.assert_not_called()
+
+    def test_active_group_labels_and_all_group_collision_codes(self):
+        lib = Mock()
+        lib.xkb_context_new.return_value = 1
+        lib.xkb_keymap_new_from_names.return_value = 2
+        lib.xkb_keymap_min_keycode.return_value = 38
+        lib.xkb_keymap_max_keycode.return_value = 38
+        lib.xkb_keymap_num_layouts_for_key.return_value = 2
+        lib.xkb_keymap_num_levels_for_key.return_value = 1
+        values = [(keymap.C.c_uint * 1)(i) for i in (1, 2)]
+        def symbols(mapping, code, group, level, out):
+            keymap.C.cast(out, keymap.C.POINTER(keymap.C.POINTER(keymap.C.c_uint)))[0] = values[group]
+            return 1
+        def name(symbol, out, size):
+            text = ("a" if symbol == 1 else "Cyrillic_ef").encode()
+            keymap.C.memmove(out, text + b"\0", len(text) + 1)
+            return len(text)
+        lib.xkb_keymap_key_get_syms_by_level.side_effect = symbols
+        lib.xkb_keysym_get_name.side_effect = name
+        lib.xkb_keysym_to_utf32.side_effect = lambda sym: ord("a" if sym == 1 else "ф")
+        with patch.object(keymap.C, "CDLL", return_value=lib):
+            result = keymap.describe({"layout": "us,ru", "active_layout_index": 1, "active_keymap": "Russian"})
+        self.assertEqual(result["labels"], {"30": "ф"})
+        self.assertEqual(result["codes"], {"a": [38], "cyrillic_ef": [38], "ф": [38]})
+        self.assertEqual(result["layout"], "Russian")
+        lib.xkb_keymap_unref.assert_called_once_with(2)
+        lib.xkb_context_unref.assert_called_once_with(1)
 
 
 class BackendTests(unittest.TestCase):

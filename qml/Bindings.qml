@@ -4,6 +4,7 @@ import qs.Commons as Commons
 import qs.Ui as Ui
 import "model/Bindings.js" as Bindings
 import "model/Tasks.js" as Tasks
+import "model/Keyboard.js" as Keyboard
 
 Column {
   id:root
@@ -28,18 +29,20 @@ Column {
   property bool recording:false
   property var pendingReplacement:null
   property bool alive:true
+  property bool sourceChanged:false
+  readonly property var keyHints:Bindings.keyHints(Keyboard.layout().concat(root.showMouse?Keyboard.mouse():[]),service.nativeBindings,service.nativeKeymap,modifiers)
   readonly property var collisions:chord?Bindings.conflicts([{chord:chord}],service.nativeBindings,service.nativeKeymap).concat(Bindings.draftConflicts(chord,draft,service.nativeKeymap)):[]
   readonly property var routingWarnings:Bindings.routingWarnings(chord,service.nativeRouting,service.nativeKeymap)
   spacing:Style.space(8)
   function load(){
-    var token=++generation;loading=true;editing=false;defaults=false;recording=false;pendingReplacement=null
+    var token=++generation;loading=true;editing=false;defaults=false;recording=false;pendingReplacement=null;sourceChanged=false
     service.inputConfigCommand({action:"snapshot",file:configFile},function(v,e){if(!root.alive||token!==root.generation)return;root.loading=false;root.error=e||"";if(!e){root.nativeState=v;root.draft=v.text}})
   }
   function find(text){var at=draft.indexOf(text);if(at>=0){defaults=false;editor.input.forceActiveFocus();editor.input.select(at,at+text.length)}else error="Defined in Omarchy's defaults; edit the native override below."}
   function begin(){if(nativeState.privileged){service.inputConfigCommand({action:"admin-edit",file:configFile},function(v,e){root.error=e||""});return}defaults=false;editing=true}
   function save(){
     loading=true;var token=++generation
-    service.inputConfigCommand({action:"save",file:configFile,expected:nativeState.text,text:draft},function(v,e){if(!root.alive||token!==root.generation)return;root.loading=false;root.error=e||"";if(!e){root.nativeState=v;root.draft=v.text;root.editing=false}})
+    service.inputConfigCommand({action:"save",file:configFile,expected:nativeState.text,text:draft},function(v,e){if(!root.alive||token!==root.generation)return;root.loading=false;root.error=e||"";if(!e){root.nativeState=v;root.draft=v.text;root.editing=false;root.sourceChanged=false}})
   }
   function appendBinding(){
     try {
@@ -56,6 +59,11 @@ Column {
     draft+="\n"+pending.text+"\n"
   }
   onBindingLayerChanged:{kind=bindingLayer==="macro"?"schedule":"command";target="";if(service)load()}
+  onModifiersChanged:{var key=Keyboard.layout().concat(Keyboard.mouse()).find(function(k){return k.id===root.keyId});if(key&&key.code!==null)chord=Bindings.physical(key,modifiers)}
+  Connections {
+    target:root.service
+    function onNativeRevisionChanged(){if(root.editing){root.sourceChanged=true;root.pendingReplacement=null}}
+  }
   Component.onCompleted:load()
   Component.onDestruction:{alive=false;generation++}
   Keys.onPressed:function(event){
@@ -64,9 +72,10 @@ Column {
     if([Qt.Key_Control,Qt.Key_Shift,Qt.Key_Alt,Qt.Key_Meta,Qt.Key_AltGr].indexOf(event.key)>=0)return
     var key=event.nativeScanCode>0?"code:"+event.nativeScanCode:Bindings.keysym(Tasks.key(event));if(!key)return
     var mods=[];if(event.modifiers&Qt.ControlModifier)mods.push("CTRL");if(event.modifiers&Qt.ShiftModifier)mods.push("SHIFT");if(event.modifiers&Qt.AltModifier)mods.push("ALT");if(event.modifiers&Qt.MetaModifier)mods.push("SUPER")
-    chord=Bindings.chord(mods.concat([key]).join(" + "));recording=false
+    keyId="";chord=Bindings.chord(mods.concat([key]).join(" + "));recording=false
   }
-  KeyboardMap {width:parent.width;selected:root.keyId;showMouse:root.showMouse;onKeySelected:function(key){root.keyId=key.id;if(key.code!==null)root.chord=Bindings.physical(key,root.modifiers)}}
+  KeyboardMap {width:parent.width;keymap:root.service.nativeKeymap;hints:root.keyHints;selected:root.keyId;showMouse:root.showMouse;onKeySelected:function(key){root.keyId=key.id;root.chord=key.code===null?"":Bindings.physical(key,root.modifiers)}}
+  Text {width:parent.width;wrapMode:Text.Wrap;text:"Dots mark active bindings for the selected modifiers; hover for their chords. Keys select physical positions, not commands.";textFormat:Text.PlainText;color:Commons.Color.foreground;font.family:Style.font.family;font.pixelSize:Style.font.caption}
   Flow {
     width:parent.width;spacing:Style.space(8)
     Ui.Toggle {label:"Show mouse";checked:root.showMouse;onClicked:root.showMouse=!checked}
@@ -77,15 +86,16 @@ Column {
     Ui.Dropdown {label:"File";options:["bindings.lua","input.lua"];value:root.configFile;enabled:!root.editing&&!root.loading;onChanged:function(v){root.configFile=v;root.load()}}
     Ui.Button {text:"Edit";iconText:"󰏫";enabled:!root.editing&&!root.loading;onClicked:root.begin()}
     Ui.Button {text:"Save";iconText:"󰆓";enabled:root.editing&&!root.loading&&!root.pendingReplacement;onClicked:root.save()}
-    Ui.Button {text:"Cancel";visible:root.editing;onClicked:{root.pendingReplacement=null;root.draft=root.nativeState.text;root.editing=false}}
-    Ui.Button {text:"Reload";enabled:!root.editing&&!root.loading;onClicked:root.load()}
+    Ui.Button {text:"Cancel";visible:root.editing;onClicked:root.load()}
+    Ui.Button {text:"Reload file";enabled:!root.editing&&!root.loading;onClicked:root.load()}
     Ui.Button {text:"Default";enabled:!root.editing;onClicked:root.defaults=!root.defaults}
   }
   Text {width:parent.width;wrapMode:Text.Wrap;text:root.nativeState.path||"";textFormat:Text.PlainText;color:Commons.Color.foreground;font.family:Style.font.family;font.pixelSize:Style.font.caption}
+  Text {visible:root.sourceChanged; width:parent.width;wrapMode:Text.Wrap;text:"Active hotkeys were refreshed. Your draft is unchanged; Save still checks for external file edits.";textFormat:Text.PlainText;color:Commons.Color.accent;font.family:Style.font.family;font.pixelSize:Style.font.caption}
   CodeArea {id:editor;width:parent.width;implicitHeight:Style.space(260);readOnly:!root.editing||root.defaults;text:root.defaults?String(root.nativeState.defaults||""):root.draft;onEdited:function(v){root.draft=v}}
   Column {
     visible:root.editing&&root.configFile==="bindings.lua";enabled:!root.loading;width:parent.width;spacing:Style.space(8)
-    Ui.TextField {width:parent.width;placeholderText:"Chord";text:root.chord;onTextEdited:root.chord=text}
+    Ui.TextField {width:parent.width;placeholderText:"Chord";text:root.chord;onTextEdited:{root.keyId="";root.chord=text}}
     Ui.Button {text:root.recording?"Press a chord (Escape cancels)":"Record chord";onClicked:{root.recording=!root.recording;if(root.recording)root.forceActiveFocus()}}
     Ui.Dropdown {label:"Action";options:root.bindingLayer==="macro"?["schedule","hotkey","profile"]:["command","text"];value:root.kind;onChanged:function(v){root.kind=v;root.target=""}}
     Ui.Dropdown {visible:root.kind==="schedule";label:"Schedule";options:root.service.tasks.map(function(t){return t.id});value:root.target;onChanged:function(v){root.target=v}}

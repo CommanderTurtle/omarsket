@@ -41,6 +41,32 @@ For updates, disable the plugin, run `omarchy plugin update io.github.commandert
 repeat step 2 from its checkout, then enable.
 The optional `bash build-plugin.sh` performs the same initialization.
 
+## Keyboard maps and hotkeys
+
+Active hotkey metadata is read on runtime startup, when opening Keyboard, after
+Hyprland reports a completed config reload or active-layout change, and with
+**Refresh hotkeys** in the keyboard header. Event bursts are debounced and reads
+are serialized. Refresh only reads bindings/XKB rules; it does not reload the
+compositor, register hooks, start input routing, or execute the displayed keys.
+Failed reads retain the last map with an error instead of pretending no bindings
+exist. Macrohelp's heatmap connection is independent of this map.
+
+The board is a full-size ANSI reference, not hardware/firmware discovery. Legends
+follow the main keyboard's configured XKB layout when reconstructible; physical
+evdev identities, heatmap values and remaps do not change when a legend changes.
+Custom virtual keymaps without rule names report unavailable rather than assuming
+US. In the binding editor, dots/hover text show bindings for the selected modifiers.
+Print, Scroll Lock and Pause have their own physical positions.
+
+**Refresh hotkeys** preserves an open draft and invalidates any pending replacement
+confirmation. **Reload file** (or Cancel) explicitly rereads the native file;
+Save retains its existing external-edit check. Changing keyboard sections returns
+the view to the top rather than retaining another section's scroll offset.
+
+The event listener uses the shell's existing
+[Hyprland IPC events](https://wiki.hypr.land/IPC/) through
+[Quickshell](https://quickshell.org/docs/v0.1.0/types/Quickshell.Hyprland/Hyprland/).
+
 ## Optional physical input routing
 
 Off by default. Uses the system `libevdev` and kernel uinput, not another remapping

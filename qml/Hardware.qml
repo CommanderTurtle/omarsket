@@ -19,7 +19,7 @@ Column {
   Ui.Toggle {label:"Enable onboard discovery";checked:root.optIn;onClicked:{root.optIn=!checked;if(checked){root.state={providers:[]};root.error=""}}}
   Column {
     enabled:root.optIn;width:parent.width;spacing:Style.space(8)
-    KeyboardMap {width:parent.width;showMouse:root.showMouse;opacity:root.optIn?1:.4}
+    KeyboardMap {width:parent.width;keymap:root.service.nativeKeymap;showMouse:root.showMouse;opacity:root.optIn?1:.4}
     Ui.Toggle {label:"Show mouse";checked:root.showMouse;onClicked:root.showMouse=!checked}
     Flow {
       width:parent.width;spacing:Style.space(8)

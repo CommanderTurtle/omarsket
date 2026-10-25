@@ -4,7 +4,7 @@ const read=path=>readFileSync(new URL("../"+path,import.meta.url),"utf8")
 test("physical input is opt-in and cannot start from an ordinary snapshot",()=>{
   const q=read("qml/InputRouter.qml"),source=read("src/remap.rs")
   expect(q).toContain("property bool optIn:false")
-  expect(q).toContain('Component.onCompleted:{load(true);')
+  expect(q).toContain('Component.onCompleted:load(true)')
   expect(q).not.toMatch(/Component.onCompleted:.*action:"start"/)
   expect(source).toContain('"snapshot" => profiles(root)')
   expect(q).toContain('iconText:"󰏫"');expect(q).toContain('iconText:"󰆓"')

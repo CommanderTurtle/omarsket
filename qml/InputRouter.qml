@@ -43,7 +43,7 @@ Column {
   function mapKey(){if(!device)return;var p=Tasks.copy(profile);p.devices[deviceIndex].keys[String(sourceCode)]=disableKey?[]:modifiers.concat([targetCode]).filter(function(k,i,a){return a.indexOf(k)===i});profile=p}
   function removeKey(code){var p=Tasks.copy(profile);delete p.devices[deviceIndex].keys[code];profile=p}
   function save(){if(loading)return;loading=true;var saved=Tasks.copy(profile);call({action:"save",profile:saved,expected:previous&&previous.name===saved.name?previous:null},function(v,e){root.loading=false;if(!e){root.book=v;root.choose(saved.name)}})}
-  Component.onCompleted:{load(true);service.inputConfigCommand({action:"snapshot",file:"bindings.lua"},function(){})}
+  Component.onCompleted:load(true)
   Component.onDestruction:{alive=false;if(root.starting)service.call({method:"input-router",action:"stop"})}
   Timer {interval:1000;repeat:true;running:root.optIn&&(!!root.book.active||Date.now()<root.authorizingUntil);onTriggered:root.load()}
   Text {text:"ts_uinput · native touch / pass-through";textFormat:Text.PlainText;color:Commons.Color.foreground;font.family:Style.font.family;font.pixelSize:Style.font.caption}
@@ -51,7 +51,7 @@ Column {
   Column {
     visible:root.optIn;width:parent.width;spacing:Style.space(8)
     Text {visible:!root.book.helper;width:parent.width;wrapMode:Text.Wrap;text:"Initialize the optional input helper in quick-start.md.";textFormat:Text.PlainText;color:Commons.Color.urgent;font.family:Style.font.family;font.pixelSize:Style.font.caption}
-    KeyboardMap {width:parent.width;showMouse:root.showMouse;selected:root.selectedKey;onKeySelected:function(k){if(!root.editing||k.code===null)return;root.selectedKey=k.id;if(root.pickingTarget)root.targetCode=k.code;else root.sourceCode=k.code}}
+    KeyboardMap {width:parent.width;keymap:root.service.nativeKeymap;showMouse:root.showMouse;selected:root.selectedKey;onKeySelected:function(k){if(!root.editing||k.code===null)return;root.selectedKey=k.id;if(root.pickingTarget)root.targetCode=k.code;else root.sourceCode=k.code}}
     Ui.Toggle {label:"Show mouse";checked:root.showMouse;onClicked:root.showMouse=!checked}
     Ui.Dropdown {label:"Profile";options:["ts_uinput"].concat(root.book.profiles.map(function(p){return p.name}));value:root.selected;enabled:!root.editing;onChanged:function(v){root.choose(v)}}
     Flow {

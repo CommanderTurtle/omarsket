@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Quickshell.Hyprland
 import qs.Commons
 
 Item {
@@ -29,7 +30,31 @@ Item {
   property var nativeBindings: []
   property var nativeKeymap: ({})
   property var nativeRouting: null
-  function inputConfigCommand(request,callback){request.method="input-config";call(request,function(v,e){if(!e&&v.bindings){root.nativeBindings=v.bindings;root.nativeKeymap=v.keymap||{};root.nativeRouting=v.routing||null}if(callback)callback(v,e)})}
+  property bool nativeRefreshing: false
+  property bool nativeRefreshPending: false
+  property int nativeEpoch: 0
+  property int nativeRevision: 0
+  property string nativeError: ""
+  function inputConfigCommand(request,callback){request.method="input-config";call(request,function(v,e){if(!e&&request.action==="save")root.refreshNative();if(callback)callback(v,e)})}
+  function refreshNative(){
+    if(!ready)return
+    if(nativeRefreshing){nativeRefreshPending=true;return}
+    nativeRefreshing=true;nativeRefreshPending=false
+    var token=nativeEpoch
+    call({method:"input-config",action:"describe"},function(v,e){
+      if(token!==root.nativeEpoch)return
+      root.nativeRefreshing=false
+      if(root.nativeRefreshPending){root.refreshNative();return}
+      var failure=e||(!v||!Array.isArray(v.bindings)?"Invalid native keyboard metadata":"")
+      root.nativeError=failure||((v&&v.keymap&&v.keymap.error)||"")
+      if(!failure){
+        root.nativeBindings=v.bindings;root.nativeKeymap=v.keymap||{};root.nativeRouting=v.routing||null;root.nativeRevision++
+      }
+    })
+  }
+  function nativeEvent(name){if(name==="configreloaded"||name==="activelayout")nativeRefreshDelay.restart()}
+  Timer {id:nativeRefreshDelay;interval:150;onTriggered:root.refreshNative()}
+  Connections {target:Hyprland;function onRawEvent(event){root.nativeEvent(event.name)}}
   readonly property string macrohelp: (Quickshell.env("XDG_DATA_HOME")||Quickshell.env("HOME")+"/.local/share")+"/macrohelp/overlay/bin/macrohelpctl"
   signal stopping()
   function openHeatmap() {
@@ -130,7 +155,7 @@ Item {
         var reply
         try { reply = JSON.parse(line) } catch (e) { root.error = "Invalid runtime response"; return }
         if (reply.event === "stopping") { root.operationEpoch++;root.stopping();return }
-        if (reply.event === "ready") { root.ready = true; root.apply(reply.snapshot); return }
+        if (reply.event === "ready") { root.ready = true; root.apply(reply.snapshot); root.refreshNative(); return }
         if (reply.event === "store") { root.apply(reply.snapshot); return }
         if (reply.event === "jobs") { root.jobs = reply.jobs; return }
         if (reply.event === "error") { root.error = reply.error; return }
@@ -144,6 +169,8 @@ Item {
     stderr: SplitParser { onRead: function(line) { root.error = line } }
     onExited: function(code) {
       root.ready = false
+      root.nativeEpoch++;root.nativeRefreshing=false;root.nativeRefreshPending=false;nativeRefreshDelay.stop()
+      root.nativeError="Runtime stopped; hotkey map is stale"
       root.operationEpoch++;root.stopping()
       var callbacks = root.callbacks; root.callbacks = ({})
       for (var id in callbacks) callbacks[id](null,"Runtime stopped")

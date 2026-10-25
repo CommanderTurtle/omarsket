@@ -14,7 +14,8 @@ Ui.Panel {
   readonly property color fg: barForeground
   readonly property string face: bar ? bar.fontFamily : Style.font.family
   property string tab: "Tasks"
-  onTabChanged:if(app)app.heatmapVisible=opened&&tab==="Keyboard"
+  onTabChanged:{if(app)app.heatmapVisible=opened&&tab==="Keyboard";resetScroll()}
+  function resetScroll(){Qt.callLater(function(){if(scroll.contentItem)scroll.contentItem.contentY=0})}
   property var documents: []
   property int documentIndex: -1
   property var draft: Tasks.blank("Untitled")
@@ -272,7 +273,7 @@ Ui.Panel {
           id:content;width:scroll.availableWidth;spacing:Style.space(10)
           Text {visible:root.app&&root.app.error!=="";text:root.app?root.app.error:"";width:parent.width;wrapMode:Text.Wrap;textFormat:Text.PlainText;color:Commons.Color.urgent;font.family:root.face;font.pixelSize:Style.font.body}
           Ui.Button {visible:root.app&&!root.app.ready;text:"Start runtime";onClicked:root.app.restart()}
-          Loader {width:parent.width;active:root.tab==="Keyboard"&&!!root.app;sourceComponent:Component {InputLayers {width:parent.width;service:root.app}}}
+          Loader {width:parent.width;active:root.tab==="Keyboard"&&!!root.app;sourceComponent:Component {InputLayers {width:parent.width;service:root.app;onResetScroll:root.resetScroll()}}}
           Flow {
             visible:root.closingIndex>=0;width:parent.width;spacing:Style.space(8)
             Text {textFormat:Text.PlainText;text:"Unsaved schedule";color:root.fg;font.family:root.face;font.pixelSize:Style.font.body}

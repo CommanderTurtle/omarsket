@@ -2,8 +2,98 @@ import { test, expect } from "bun:test"
 import { readFileSync } from "node:fs"
 import { runInNewContext } from "node:vm"
 const base=new URL("../qml/",import.meta.url)
-const K=runInNewContext(readFileSync(new URL("model/Keyboard.js",base),"utf8")+"\n({layout,mouse,maximum,normalized})")
-const B=runInNewContext(readFileSync(new URL("model/Bindings.js",base),"utf8")+"\n({chord,nativeChord,conflicts,physical,line,lua,routingWarnings,sourceChords,replacement,draftConflicts,profileWarnings})")
+const K=runInNewContext(readFileSync(new URL("model/Keyboard.js",base),"utf8")+"\n({layout,mouse,maximum,normalized,label,geometry})")
+const B=runInNewContext(readFileSync(new URL("model/Bindings.js",base),"utf8")+"\n({chord,nativeChord,conflicts,physical,line,lua,routingWarnings,sourceChords,replacement,draftConflicts,profileWarnings,keyHints})")
+
+test("keymap legends change without changing physical identities or geometry",()=>{
+  const a=K.layout().find(k=>k.code===30),map={labels:{30:"q",99:"Print",70:"Scroll_Lock",119:"Pause"}}
+  expect(K.label(a,map)).toBe("Q");expect(B.physical(a,[])).toBe("code:38")
+  expect(K.label(a,{labels:{30:"й"}})).toBe("Й")
+  expect(K.label(a,{})).toBe("A")
+  for(const code of [99,70,119])expect(K.layout().some(k=>k.code===code)).toBe(true)
+  for(const width of [0,120,650,1200])for(const mouse of [false,true]){
+    const g=K.geometry(width,mouse)
+    expect(g.unit).toBeGreaterThanOrEqual(0)
+    for(const k of K.layout())expect((k.y+k.h)*g.unit).toBeLessThanOrEqual(g.height+1e-9)
+    if(mouse)for(const k of K.mouse())expect((k.y+k.h+6.8)*g.unit).toBeLessThanOrEqual(g.height+1e-9)
+  }
+  expect(K.geometry(-10,false).height).toBe(0)
+})
+
+test("keyboard binding indicators respect modifiers, physical keys, mouse and submaps",()=>{
+  const keys=K.layout().concat(K.mouse()),map={codes:{f:[41]}}
+  const native=[{key:"f",modmask:64,description:"Files"},{key:"mouse:272",modmask:64,description:"Pointer"},{key:"f",modmask:4,description:"Control"},{key:"f",modmask:64,submap:"resize",description:"Inactive"}]
+  const hints=B.keyHints(keys,native,map,["SUPER"])
+  expect(hints[33]).toContain("Files");expect(hints[33]).not.toContain("Control");expect(hints[33]).not.toContain("Inactive")
+  expect(hints[272]).toContain("Pointer");expect(hints.copilot).toBeUndefined()
+  expect(B.keyHints(keys,native,map,[])).toEqual({})
+})
+
+function nativeService(){
+  const source=readFileSync(new URL("Service.qml",base),"utf8")
+  const code=source.slice(source.indexOf("  function refreshNative()"),source.indexOf("  Timer {id:nativeRefreshDelay"))
+  const requests=[],state={ready:true,nativeRefreshing:false,nativeRefreshPending:false,nativeEpoch:0,nativeRevision:0,nativeError:"",nativeBindings:[{key:"old"}],nativeKeymap:{},nativeRouting:null}
+  const delay={count:0,restart(){this.count++}}
+  state.call=(request,callback)=>requests.push({request,callback})
+  Object.assign(state,new Function("root","nativeRefreshDelay",`with(root){${code};return {refreshNative,nativeEvent}}`)(state,delay))
+  return {state,requests,delay}
+}
+
+test("keyboard startup and refresh are event-driven, with no pointer or key-event polling",()=>{
+  const service=readFileSync(new URL("Service.qml",base),"utf8"),panel=readFileSync(new URL("Panel.qml",base),"utf8"),layers=readFileSync(new URL("InputLayers.qml",base),"utf8")
+  expect(service).toContain('root.apply(reply.snapshot); root.refreshNative();')
+  expect(service).toContain('function onRawEvent(event){root.nativeEvent(event.name)}')
+  expect(layers).toContain('Component.onCompleted:service.refreshNative()')
+  expect(layers).toContain('onClicked:root.service.refreshNative()')
+  expect(panel).toContain('scroll.contentItem.contentY=0')
+  expect(layers).toContain('onInputLayerChanged:resetScroll()')
+  const refresh=service.slice(service.indexOf('function refreshNative()'),service.indexOf('readonly property string macrohelp:'))
+  for(const forbidden of ['repeat:true','cursorpos','repl','reload"','dispatch','keyPressed'])expect(refresh).not.toContain(forbidden)
+})
+
+test("changing modifiers updates a selected physical chord without replacing a manually typed chord",()=>{
+  const source=readFileSync(new URL("Bindings.qml",base),"utf8")
+  const line=source.split('\n').find(l=>l.includes('onModifiersChanged:'))
+  const fn=new Function('root','Keyboard','Bindings',`with(root)${line.slice(line.indexOf(':')+1)}`)
+  const s={keyId:"33",modifiers:["CTRL"],chord:"code:41"}
+  fn(s,K,B);expect(s.chord).toBe("CTRL + code:41")
+  s.keyId="";s.chord="SUPER + F9";s.modifiers=["ALT"]
+  fn(s,K,B);expect(s.chord).toBe("SUPER + F9")
+})
+
+test("native refresh coalesces requests, rejects invalidated results and retains good data on failure",()=>{
+  const {state:s,requests:r,delay}=nativeService()
+  s.refreshNative();s.refreshNative()
+  expect(r).toHaveLength(1);expect(r[0].request).toEqual({method:"input-config",action:"describe"})
+  r[0].callback({bindings:[{key:"stale"}],keymap:{}})
+  expect(s.nativeBindings[0].key).toBe("old");expect(r).toHaveLength(2)
+  r[1].callback({bindings:[{key:"new"}],keymap:{layout:"French"},routing:null})
+  expect(s.nativeBindings[0].key).toBe("new");expect(s.nativeRevision).toBe(1);expect(s.nativeRefreshing).toBe(false)
+  s.refreshNative();r[2].callback(null,"offline")
+  expect(s.nativeBindings[0].key).toBe("new");expect(s.nativeError).toBe("offline")
+  s.refreshNative();r[3].callback({bindings:{}})
+  expect(s.nativeError).toContain("Invalid native");expect(s.nativeBindings[0].key).toBe("new")
+  s.refreshNative();s.nativeEpoch++;r[4].callback({bindings:[]})
+  expect(s.nativeBindings[0].key).toBe("new")
+  for(const name of ["configreloaded","activelayout","activewindow","mousemove"])s.nativeEvent(name)
+  expect(delay.count).toBe(2)
+  s.ready=false;s.nativeRefreshing=false;s.refreshNative();expect(r).toHaveLength(5)
+})
+
+test("refreshing hotkey metadata preserves unsaved binding drafts and cancels stale replacement prompts",()=>{
+  const source=readFileSync(new URL("Bindings.qml",base),"utf8")
+  const begin=source.indexOf("function onNativeRevisionChanged(){")+"function onNativeRevisionChanged(){".length
+  const code=source.slice(begin,source.indexOf("\n  }",begin)).trim().replace(/}$/,"")
+  const s={editing:true,sourceChanged:false,pendingReplacement:{},draft:"unsaved",load(){this.loaded=true}}
+  new Function("root",code)(s)
+  expect(s.draft).toBe("unsaved");expect(s.sourceChanged).toBe(true);expect(s.pendingReplacement).toBeNull();expect(s.loaded).toBeUndefined()
+  s.editing=false;new Function("root",code)(s);expect(s.loaded).toBeUndefined()
+  expect(source).toContain('root.chord=key.code===null?"":Bindings.physical(key,root.modifiers)')
+  const input=readFileSync(new URL("../src/input.rs",base),"utf8")
+  const describe=input.slice(input.indexOf("fn describe()"),input.indexOf("fn read_binding_sources"))
+  expect(describe).toContain('ipc("binds")?')
+  for(const forbidden of ["reload", "repl", "atomic_text", "config_path"])expect(describe).not.toContain(forbidden)
+})
 
 test("virtual input warnings cover source, target and changed modifier bindings",()=>{
   const native=[{key:"f",modmask:64,description:"Files"},{key:"g",modmask:4,description:"Other"}]
@@ -46,7 +136,8 @@ test("collision confirmation stages edits and keeps native authorization and the
   expect(panel).toContain('text:"Keep existing"')
   expect(panel).toContain('JSON.stringify(collisions)!==pending.signature')
   expect(panel).toContain("Commons.Color.urgent")
-  expect(panel).toContain("root.nativeState.text")
+  expect(panel).toContain("expected:nativeState.text")
+  expect(panel).toContain('text:"Cancel";visible:root.editing;onClicked:root.load()')
 })
 
 test("replacement needs confirmation and rejects edits made after the prompt",()=>{

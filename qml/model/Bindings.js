@@ -82,6 +82,15 @@ function replacement(keys,kind,target,description,collisions,source){
   return remove.map(function(k){return "hl.unbind("+lua(k)+")"}).concat([line(keys,kind,target,description)]).join("\n")
 }
 function physical(key,mods) { return chord((mods||[]).concat([key.code===null?"":key.code>=272&&key.code<=276?"mouse:"+key.code:"code:"+(key.code+8)]).filter(Boolean).join(" + ")) }
+function keyHints(keys,bindings,keymap,mods) {
+  var hints={}
+  keys.forEach(function(key){
+    if(key.code===null)return
+    var matches=conflicts([{chord:physical(key,mods)}],bindings||[],keymap)
+    if(matches.length)hints[key.id]=matches.map(function(b){return nativeChord(b)+" · "+(b.description||b.dispatcher||"Binding")}).join("\n")
+  })
+  return hints
+}
 function lua(text){return '"'+String(text).replace(/[\\"\x00-\x1f]/g,function(c){return c==='\\'?'\\\\':c==='"'?'\\"':'\\'+String(c.charCodeAt(0)).padStart(3,"0")})+'"'}
 function shell(text){return "'"+String(text).replace(/'/g,"'\\''")+"'"}
 function line(keys,kind,target,description){

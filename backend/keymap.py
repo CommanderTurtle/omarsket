@@ -6,6 +6,10 @@ import sys
 
 
 def describe(config):
+    # Custom virtual-device keymaps may have no reconstructible rule names.
+    # Do not silently compile the host's default US map and call it active.
+    if not isinstance(config.get("layout"), str) or not config["layout"].strip():
+        raise RuntimeError("Native XKB rules unavailable")
     lib = C.CDLL(ctypes.util.find_library("xkbcommon") or "libxkbcommon.so.0")
     class Names(C.Structure):
         _fields_ = [(key, C.c_char_p) for key in ("rules", "model", "layout", "variant", "options")]
@@ -22,6 +26,7 @@ def describe(config):
     levels = fn("xkb_keymap_num_levels_for_key", C.c_uint, C.c_void_p, C.c_uint, C.c_uint)
     symbols = fn("xkb_keymap_key_get_syms_by_level", C.c_int, C.c_void_p, C.c_uint, C.c_uint, C.c_uint, C.POINTER(C.POINTER(C.c_uint)))
     name = fn("xkb_keysym_get_name", C.c_int, C.c_uint, C.c_char_p, C.c_size_t)
+    unicode = fn("xkb_keysym_to_utf32", C.c_uint, C.c_uint)
     context = context_new(0)
     if not context:
         raise RuntimeError("XKB context unavailable")
@@ -47,8 +52,14 @@ def describe(config):
                         values = codes.setdefault(symbol.lower(), [])
                         if code not in values:
                             values.append(code)
+                        scalar = unicode(syms[index])
+                        char = chr(scalar) if 0 < scalar <= 0x10FFFF else ""
+                        if char.isprintable() and not char.isspace():
+                            values = codes.setdefault(char.lower(), [])
+                            if code not in values:
+                                values.append(code)
                         if layout == config.get("active_layout_index", 0) and level == 0:
-                            labels[str(code - 8)] = symbol
+                            labels[str(code - 8)] = char if char.isprintable() and not char.isspace() else symbol
         return {"codes": codes, "labels": labels, "layout": config.get("active_keymap", config.get("layout", ""))}
     finally:
         if keymap:

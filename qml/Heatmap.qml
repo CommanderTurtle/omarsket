@@ -24,11 +24,11 @@ Column {
   Ui.Button {visible:!root.service.heatmapConnected&&!!root.service.heatmapError;text:"Retry";onClicked:root.service.openHeatmap()}
   Column {
     width:parent.width;spacing:Style.space(8);visible:root.service.heatmapConnected
-    KeyboardMap {width:parent.width;values:Keyboard.normalized(root.selected);showMouse:root.showMouse;selected:root.selectedKey?root.selectedKey.id:"";onKeySelected:function(key){root.selectedKey=key}}
+    KeyboardMap {width:parent.width;keymap:root.service.nativeKeymap;values:Keyboard.normalized(root.selected);showMouse:root.showMouse;selected:root.selectedKey?root.selectedKey.id:"";onKeySelected:function(key){root.selectedKey=key}}
     Ui.Toggle {width:parent.width;label:"Show mouse";checked:root.showMouse;onClicked:root.showMouse=!checked}
     Flow {
       width:parent.width;spacing:Style.space(8)
-      Text {visible:root.selectedKey!==null;text:root.selectedKey?root.selectedKey.label+" · "+Number(root.selected&&root.selected.values[root.selectedKey.id]||0).toFixed(3):"";color:Commons.Color.foreground;font.family:Style.font.family;font.pixelSize:Style.font.body;textFormat:Text.PlainText}
+      Text {visible:root.selectedKey!==null;text:root.selectedKey?Keyboard.label(root.selectedKey,root.service.nativeKeymap)+" · "+Number(root.selected&&root.selected.values[root.selectedKey.id]||0).toFixed(3):"";color:Commons.Color.foreground;font.family:Style.font.family;font.pixelSize:Style.font.body;textFormat:Text.PlainText}
       Ui.NumberField {visible:!!root.selectedKey&&root.selectedKey.code!==null;label:"Weight (%)";from:1;to:10000;value:root.selectedKey?Math.round((root.weights[root.selectedKey.id]||1)*100):100;onModified:function(v){var next=Object.assign({},root.weights);next[root.selectedKey.id]=v/100;root.weights=next}}
     }
     Ui.TextField {width:parent.width;placeholderText:"Session name";text:root.name;onTextEdited:root.name=text}
