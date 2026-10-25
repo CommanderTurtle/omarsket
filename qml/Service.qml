@@ -19,9 +19,9 @@ Item {
   property int serial: 0
   property int operationEpoch: 0
   property var callbacks: ({})
-  property bool heatmapChecked: false
   property bool heatmapConnected: false
   property bool heatmapVisible: false
+  onHeatmapVisibleChanged:if(heatmapVisible)openHeatmap()
   property bool heatmapAvailable: false
   property string heatmapError: ""
   property var heatmapState: ({version:1,active:null,sessions:[]})
@@ -33,8 +33,8 @@ Item {
   readonly property string macrohelp: (Quickshell.env("XDG_DATA_HOME")||Quickshell.env("HOME")+"/.local/share")+"/macrohelp/overlay/bin/macrohelpctl"
   signal stopping()
   function openHeatmap() {
-    if(heatmapChecked)return
-    heatmapChecked=true
+    if(root.heatmapConnected||health.running)return
+    root.heatmapError=""
     health.command=[macrohelp,"health"].concat(settings&&settings.macrohelpEnvFile?["--env",String(settings.macrohelpEnvFile)]:[])
     health.running=true
   }
@@ -67,7 +67,12 @@ Item {
         var reply=JSON.parse(String(bridgeOutput.text))
         if(reply.state){root.heatmapState=reply.state;root.heatmapAvailable=!!reply.available;root.heatmapError=reply.error||""}
         else if(reply.error)root.heatmapError=reply.error
-      }catch(e){root.heatmapError="failed to connect to macrohelp"}
+      }catch(e){
+        root.heatmapConnected=false
+        root.heatmapAvailable=false
+        root.heatmapQueue=[]
+        root.heatmapError="failed to connect to macrohelp"
+      }
       root.nextHeatmap()
     }
   }

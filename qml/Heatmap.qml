@@ -21,6 +21,7 @@ Column {
   spacing:Style.space(8)
   Component.onCompleted:service.openHeatmap()
   Text {visible:!root.service.heatmapConnected;text:root.service.heatmapError||"Connecting…";color:Commons.Color.urgent;font.family:Style.font.family;font.pixelSize:Style.font.body;textFormat:Text.PlainText}
+  Ui.Button {visible:!root.service.heatmapConnected&&!!root.service.heatmapError;text:"Retry";onClicked:root.service.openHeatmap()}
   Column {
     width:parent.width;spacing:Style.space(8);visible:root.service.heatmapConnected
     KeyboardMap {width:parent.width;values:Keyboard.normalized(root.selected);showMouse:root.showMouse;selected:root.selectedKey?root.selectedKey.id:"";onKeySelected:function(key){root.selectedKey=key}}

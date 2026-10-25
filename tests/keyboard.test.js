@@ -51,7 +51,9 @@ test("collision confirmation stages edits and keeps native authorization and the
 
 test("replacement needs confirmation and rejects edits made after the prompt",()=>{
   const qml=readFileSync(new URL("Bindings.qml",base),"utf8")
-  const methods=qml.slice(qml.indexOf("  function appendBinding()"),qml.indexOf("  onLayerChanged:"))
+  const end=qml.indexOf("  onBindingLayerChanged:")
+  expect(end).toBeGreaterThan(qml.indexOf("  function appendBinding()"))
+  const methods=qml.slice(qml.indexOf("  function appendBinding()"),end)
   const state={draft:"-- user config",editing:true,chord:"SUPER+SHIFT+E",kind:"command",target:"terminal",description:"Shell",error:"",pendingReplacement:null,nativeState:{defaults:'o.bind("SUPER + SHIFT + E", "Browser", browser_callback)'},collisions:[{key:"E",modmask:65,description:"Browser"}]}
   const fn=new Function("root","Bindings",`with(root){${methods};return {appendBinding,confirmReplacement}}`)(state,B)
   fn.appendBinding()
@@ -112,9 +114,42 @@ test("native binding warnings account for active physical-input remaps",()=>{
   expect(B.routingWarnings("SUPER+code:43",routing,keymap)).toHaveLength(0)
   expect(B.routingWarnings("SUPER+F",null,keymap)).toHaveLength(0)
 })
-test("one HTTP health check, then native aggregate IPC only while the panel is visible",()=>{
+test("failed heatmap health checks can retry without overlapping requests or polling a connected daemon",()=>{
   const source=readFileSync(new URL("Service.qml",base),"utf8")
-  expect(source).toContain("if(heatmapChecked)return")
+  const start=source.slice(source.indexOf("  function openHeatmap()"),source.indexOf("  function heatmapCommand("))
+  const state={heatmapConnected:false,heatmapError:"failed to connect to macrohelp"}
+  const health={running:false,command:[]},settings={macrohelpEnvFile:"/private/overlay.env"}
+  const open=new Function("root","health","macrohelp","settings",start+";return openHeatmap")(state,health,"/bin/macrohelpctl",settings)
+  open()
+  expect(health.command).toEqual(["/bin/macrohelpctl","health","--env","/private/overlay.env"])
+  expect(health.running).toBe(true)
+  expect(state.heatmapError).toBe("")
+  health.command=["in flight"];open();expect(health.command).toEqual(["in flight"])
+  health.running=false;state.heatmapError="failed to connect to macrohelp"
+  open();expect(health.command[1]).toBe("health")
+  health.running=false;state.heatmapConnected=true;health.command=["connected"]
+  open();expect(health.running).toBe(false);expect(health.command).toEqual(["connected"])
+})
+test("heatmap transport failure disconnects and discards queued mutations before a retry",()=>{
+  const source=readFileSync(new URL("Service.qml",base),"utf8")
+  const process=source.slice(source.indexOf("    id:bridge"),source.indexOf("  readonly property string helper:"))
+  const handler=process.slice(process.indexOf("    onExited:function(code){")+"    onExited:function(code){".length,process.lastIndexOf("\n    }"))
+  const state={heatmapConnected:true,heatmapAvailable:true,heatmapQueue:['{"action":"start"}'],heatmapError:"",nextHeatmap(){this.advanced=true}}
+  const finish=new Function("root","bridgeOutput","code",handler)
+  finish(state,{text:""},1)
+  expect(state.heatmapConnected).toBe(false)
+  expect(state.heatmapAvailable).toBe(false)
+  expect(state.heatmapQueue).toEqual([])
+  expect(state.heatmapError).toContain("failed to connect")
+  expect(state.advanced).toBe(true)
+  state.heatmapConnected=true;state.heatmapQueue=['{"action":"snapshot"}']
+  finish(state,{text:'{"error":"Session name is required"}'},0)
+  expect(state.heatmapConnected).toBe(true)
+  expect(state.heatmapQueue).toHaveLength(1)
+  expect(state.heatmapError).toBe("Session name is required")
+})
+test("heatmap uses native aggregate IPC only while the panel is visible",()=>{
+  const source=readFileSync(new URL("Service.qml",base),"utf8")
   expect(source).toContain('[macrohelp,"health"]')
   expect(source).toContain('"io.github.commanderturtle.macrohelp","heatmap"')
   expect(source).toContain("running:root.heatmapConnected&&root.heatmapVisible")

@@ -65,6 +65,13 @@ need an actual emitted event. Virtual devices are named `Omarsket …`; device-s
 compositor settings may need a matching native rule.
 Macrohelp's compositor-level key display and heatmap observe the remapped output.
 
+The Keyboard heatmap connects to Macrohelp independently of task execution. If
+Macrohelp starts later or its bridge disconnects, reopen the Keyboard panel or
+choose **Retry**. A failed connection is not cached for the rest of the shell
+session; a successful connection still uses native aggregate IPC, not repeated
+HTTP health checks. Pending heatmap commands are discarded on a transport failure
+so reconnecting does not replay a stale Start/End/Delete request.
+
 Update the optional helper with the same commands after stopping it. To remove it:
 `sudo rm -- /usr/local/libexec/omarsket-input`. Remove saved profiles separately if wanted.
 
