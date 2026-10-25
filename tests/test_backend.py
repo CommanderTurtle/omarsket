@@ -52,6 +52,32 @@ class BackendTests(unittest.TestCase):
         worker.perform(dict(type="scroll", vertical=-2, horizontal=1), lambda: inputs)
         inputs.mouse.scroll.assert_called_once_with(-2, 1)
 
+    @patch.object(worker.time, "sleep")
+    @patch.object(worker, "_detect_scale")
+    @patch.object(worker, "checked")
+    def test_pointer_actions_reuse_startup_scale(self, checked, detect_scale, sleep):
+        checked.return_value.stdout = '{"x": 10, "y": 20}'
+        inputs = worker.Input.__new__(worker.Input)
+        inputs.keyboard = Mock()
+        inputs._mouse = Mock()
+        with patch.object(worker, "SCALE", 2):
+            for action in (
+                dict(type="move", x=100, y=200),
+                dict(type="move", x=200, y=300, duration_ms=32),
+                dict(type="cursormovements", cursormovsmap=[[0, 0, 100, 200], [0, 32, 200, 300]]),
+                dict(type="click", x=100, y=200, button="left"),
+                dict(type="scroll", vertical=1),
+                dict(type="cursor"),
+            ):
+                worker.perform(action, lambda: inputs)
+        detect_scale.assert_not_called()
+        self.assertTrue(checked.called)
+        for invocation in checked.call_args_list:
+            self.assertEqual(invocation.args[0], ["hyprctl", "-j", "cursorpos"])
+        inputs.mouse.click.assert_any_call(50, 100, "nothing")
+        inputs.mouse.click.assert_any_call(100, 150, "nothing")
+        inputs.mouse.click.assert_any_call(50, 100, "left")
+
     @patch.object(worker, "checked")
     def test_explicit_screenshot_actions_keep_tasket_semantics(self, checked):
         checked.return_value.stdout = b"png"
