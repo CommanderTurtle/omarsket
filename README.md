@@ -4,6 +4,14 @@ Macro schedules for Omarchy Quattro / Hyprland. Rust task engine and a private
 [Wayland-automation](https://github.com/CommanderTurtle/Wayland-automation) backend.
 No network listener, telemetry or separately installed service.
 
+<img width="600" height="auto" alt="screenshot-2026-10-26_04-31-37" src="https://github.com/user-attachments/assets/4a5e289d-ac63-476b-a727-db274e127cb0" />
+
+---
+
+<img width="600" height="auto" alt="screenshot-2026-10-26_04-31-21" src="https://github.com/user-attachments/assets/0c3455d5-15e6-46c1-8de3-c192112a6d42" />
+
+---
+
 ## Install
 
 Requires Omarchy Quattro. Additional build/file-dialog packages:
