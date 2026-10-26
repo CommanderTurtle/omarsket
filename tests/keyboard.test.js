@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs"
 import { runInNewContext } from "node:vm"
 const base=new URL("../qml/",import.meta.url)
 const K=runInNewContext(readFileSync(new URL("model/Keyboard.js",base),"utf8")+"\n({layout,mouse,maximum,normalized,label,geometry})")
-const B=runInNewContext(readFileSync(new URL("model/Bindings.js",base),"utf8")+"\n({chord,nativeChord,conflicts,physical,line,lua,routingWarnings,sourceChords,replacement,draftConflicts,profileWarnings,keyHints})")
+const B=runInNewContext(readFileSync(new URL("model/Bindings.js",base),"utf8")+"\n({chord,nativeChord,conflicts,physical,line,lua,routingWarnings,sourceChords,sourceBindings,replacement,draftConflicts,profileWarnings,keyHints,layer,rows,presentation})")
 
 test("keymap legends change without changing physical identities or geometry",()=>{
   const a=K.layout().find(k=>k.code===30),map={labels:{30:"q",99:"Print",70:"Scroll_Lock",119:"Pause"}}
@@ -43,11 +43,11 @@ test("keyboard startup and refresh are event-driven, with no pointer or key-even
   const service=readFileSync(new URL("Service.qml",base),"utf8"),panel=readFileSync(new URL("Panel.qml",base),"utf8"),layers=readFileSync(new URL("InputLayers.qml",base),"utf8")
   expect(service).toContain('root.apply(reply.snapshot); root.refreshNative();')
   expect(service).toContain('function onRawEvent(event){root.nativeEvent(event.name)}')
-  expect(layers).toContain('Component.onCompleted:service.refreshNative()')
+  expect(layers).toContain('Component.onCompleted:{service.refreshNative();updateVisibility()}')
   expect(layers).toContain('onClicked:root.service.refreshNative()')
   expect(panel).toContain('scroll.contentItem.contentY=0')
-  expect(layers).toContain('onInputLayerChanged:resetScroll()')
-  const refresh=service.slice(service.indexOf('function refreshNative()'),service.indexOf('readonly property string macrohelp:'))
+  expect(layers).toContain('onInputLayerChanged:{updateVisibility();resetScroll()}')
+  const refresh=service.slice(service.indexOf('function refreshNative()'),service.indexOf('signal stopping()'))
   for(const forbidden of ['repeat:true','cursorpos','repl','reload"','dispatch','keyPressed'])expect(refresh).not.toContain(forbidden)
 })
 
@@ -88,7 +88,7 @@ test("refreshing hotkey metadata preserves unsaved binding drafts and cancels st
   new Function("root",code)(s)
   expect(s.draft).toBe("unsaved");expect(s.sourceChanged).toBe(true);expect(s.pendingReplacement).toBeNull();expect(s.loaded).toBeUndefined()
   s.editing=false;new Function("root",code)(s);expect(s.loaded).toBeUndefined()
-  expect(source).toContain('root.chord=key.code===null?"":Bindings.physical(key,root.modifiers)')
+  expect(source).toContain('chord=key.code===null?"":Bindings.physical(key,modifiers)')
   const input=readFileSync(new URL("../src/input.rs",base),"utf8")
   const describe=input.slice(input.indexOf("fn describe()"),input.indexOf("fn read_binding_sources"))
   expect(describe).toContain('ipc("binds")?')
@@ -205,47 +205,53 @@ test("native binding warnings account for active physical-input remaps",()=>{
   expect(B.routingWarnings("SUPER+code:43",routing,keymap)).toHaveLength(0)
   expect(B.routingWarnings("SUPER+F",null,keymap)).toHaveLength(0)
 })
-test("failed heatmap health checks can retry without overlapping requests or polling a connected daemon",()=>{
+test("heatmap retries probe its real IPC surface without the unrelated HTTP health gate",()=>{
   const source=readFileSync(new URL("Service.qml",base),"utf8")
   const start=source.slice(source.indexOf("  function openHeatmap()"),source.indexOf("  function heatmapCommand("))
   const state={heatmapConnected:false,heatmapError:"failed to connect to macrohelp"}
-  const health={running:false,command:[]},settings={macrohelpEnvFile:"/private/overlay.env"}
-  const open=new Function("root","health","macrohelp","settings",start+";return openHeatmap")(state,health,"/bin/macrohelpctl",settings)
+  const bridge={running:false},requests=[]
+  state.heatmapCommand=request=>{requests.push(request);bridge.running=true}
+  const open=new Function("root","bridge",start+";return openHeatmap")(state,bridge)
   open()
-  expect(health.command).toEqual(["/bin/macrohelpctl","health","--env","/private/overlay.env"])
-  expect(health.running).toBe(true)
+  expect(requests).toEqual([{action:"snapshot"}])
   expect(state.heatmapError).toBe("")
-  health.command=["in flight"];open();expect(health.command).toEqual(["in flight"])
-  health.running=false;state.heatmapError="failed to connect to macrohelp"
-  open();expect(health.command[1]).toBe("health")
-  health.running=false;state.heatmapConnected=true;health.command=["connected"]
-  open();expect(health.running).toBe(false);expect(health.command).toEqual(["connected"])
+  open();expect(requests).toHaveLength(1)
+  bridge.running=false;state.heatmapError="offline"
+  open();expect(requests).toHaveLength(2)
+  bridge.running=false;state.heatmapConnected=true
+  open();expect(bridge.running).toBe(false);expect(requests).toHaveLength(2)
 })
 test("heatmap transport failure disconnects and discards queued mutations before a retry",()=>{
   const source=readFileSync(new URL("Service.qml",base),"utf8")
   const process=source.slice(source.indexOf("    id:bridge"),source.indexOf("  readonly property string helper:"))
   const handler=process.slice(process.indexOf("    onExited:function(code){")+"    onExited:function(code){".length,process.lastIndexOf("\n    }"))
   const state={heatmapConnected:true,heatmapAvailable:true,heatmapQueue:['{"action":"start"}'],heatmapError:"",nextHeatmap(){this.advanced=true}}
-  const finish=new Function("root","bridgeOutput","code",handler)
-  finish(state,{text:""},1)
+  const finish=new Function("root","bridgeOutput","code","bridgeError",handler)
+  finish(state,{text:""},1,{text:"Target not found."})
   expect(state.heatmapConnected).toBe(false)
   expect(state.heatmapAvailable).toBe(false)
   expect(state.heatmapQueue).toEqual([])
-  expect(state.heatmapError).toContain("failed to connect")
+  expect(state.heatmapError).toContain("Target not found.")
   expect(state.advanced).toBe(true)
   state.heatmapConnected=true;state.heatmapQueue=['{"action":"snapshot"}']
   finish(state,{text:'{"error":"Session name is required"}'},0)
   expect(state.heatmapConnected).toBe(true)
   expect(state.heatmapQueue).toHaveLength(1)
   expect(state.heatmapError).toBe("Session name is required")
+  finish(state,{text:""},0)
+  expect(state.heatmapConnected).toBe(false);expect(state.heatmapError).toContain("returned no JSON")
+  finish(state,{text:'{"state":{"version":1,"active":null,"sessions":[]},"connected":true,"pending":true,"available":true}'},0)
+  expect(state.heatmapConnected).toBe(true);expect(state.heatmapBusy).toBe(true);expect(state.heatmapAvailable).toBe(true)
 })
 test("heatmap uses native aggregate IPC only while the panel is visible",()=>{
   const source=readFileSync(new URL("Service.qml",base),"utf8")
-  expect(source).toContain('[macrohelp,"health"]')
+  expect(source).not.toContain('[macrohelp,"health"]')
+  expect(source).toContain('["omarchy-shell","io.github.commanderturtle.macrohelp","heatmap"')
+  expect(source).not.toContain('["omarchy-shell","-q","io.github.commanderturtle.macrohelp","heatmap"')
   expect(source).toContain('"io.github.commanderturtle.macrohelp","heatmap"')
   expect(source).toContain("running:root.heatmapConnected&&root.heatmapVisible")
   expect(source).not.toMatch(/serviceFor\(["']io.github.commanderturtle.macrohelp/)
-  expect(source).toContain("failed to connect to macrohelp")
+  expect(source).toContain("Macrohelp heatmap IPC:")
   const panel=readFileSync(new URL("Panel.qml",base),"utf8")
   expect((panel.match(/onOpenedChanged:/g)||[])).toHaveLength(1)
 })

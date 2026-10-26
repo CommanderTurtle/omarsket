@@ -16,6 +16,7 @@ Column {
   function infer(){var owner=root;loading=true;service.call({method:"hardware-infer",vendors:vendors.slice()},function(v,e){if(!owner||!owner.alive)return;owner.loading=false;owner.error=e||"";if(!e&&owner.optIn)owner.state=v})}
   Component.onDestruction:alive=false
   spacing:Style.space(8)
+  Text {text:"Onboard · device-reported state (read-only)";textFormat:Text.PlainText;color:Commons.Color.accent;font.family:Style.font.family;font.pixelSize:Style.font.body}
   Ui.Toggle {label:"Enable onboard discovery";checked:root.optIn;onClicked:{root.optIn=!checked;if(checked){root.state={providers:[]};root.error=""}}}
   Column {
     enabled:root.optIn;width:parent.width;spacing:Style.space(8)

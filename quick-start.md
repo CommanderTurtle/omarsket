@@ -58,6 +58,33 @@ Custom virtual keymaps without rule names report unavailable rather than assumin
 US. In the binding editor, dots/hover text show bindings for the selected modifiers.
 Print, Scroll Lock and Pause have their own physical positions.
 
+In **Macros**, select modifier toggles, then right-click a key (or select it and
+choose **Assign**). **Choose .omscht…** imports a validated schedule under an
+unused name and selects it as the action. Importing does not run it, append a
+binding, or save configuration: review **Append binding** / replacement first,
+then **Save**. Existing library schedules are selectable without importing.
+Conflict confirmation still covers every layer, not just the visible filter.
+
+**Assignments**, **Inactive defaults**, and **Unassigned keys** provide readable
+inventories, with descriptions/actions and chord search. A selected key filters
+the list; **All keys** clears that filter. Accent-filled keys are assigned in the
+current view, pale dots belong to another view, and warning-tinted keys have a
+literal packaged default whose global chord is not active. Missing XKB metadata
+is reported as unknown, not as a free key. **Show source** retains the native Lua
+editor; **Find in source** opens either its personal file or packaged defaults.
+
+Macros identifies Macrohelp/Omarsket commands; Software groups application/text
+commands; Omarchy groups native dispatchers and system commands. These are
+read-only command-based views of the same native namespace, not separate stores
+or a proof of where arbitrary Lua originated. Named submap assignments are listed
+with their scope; board colors and free-key checks concern global/universal
+bindings. Defaults are extracted from literal `o.bind`/`o.rebind`/`o.bind_hold` and
+`hl.bind` calls without executing Lua; generated/dynamic chords are not guessed.
+Switching these filters preserves a draft. Leaving the editor for another layer
+asks before discarding it. Closing/unloading the entire plugin is not draft storage.
+Virtual input highlights the selected device's remaps; Onboard stays explicitly
+read-only rather than pretending it can assign generic firmware bindings.
+
 **Refresh hotkeys** preserves an open draft and invalidates any pending replacement
 confirmation. **Reload file** (or Cancel) explicitly rereads the native file;
 Save retains its existing external-edit check. Changing keyboard sections returns
@@ -91,12 +118,21 @@ need an actual emitted event. Virtual devices are named `Omarsket …`; device-s
 compositor settings may need a matching native rule.
 Macrohelp's compositor-level key display and heatmap observe the remapped output.
 
-The Keyboard heatmap connects to Macrohelp independently of task execution. If
-Macrohelp starts later or its bridge disconnects, reopen the Keyboard panel or
-choose **Retry**. A failed connection is not cached for the rest of the shell
-session; a successful connection still uses native aggregate IPC, not repeated
-HTTP health checks. Pending heatmap commands are discarded on a transport failure
-so reconnecting does not replay a stale Start/End/Delete request.
+The Keyboard heatmap probes Macrohelp's registered keepLoaded shell IPC target,
+not `macrohelpctl health` or either HTTP service. If Macrohelp starts later or its
+bridge disconnects, reopen Heatmap or choose **Retry**. Errors name the IPC failure;
+they are not cached for the shell lifetime. Data-returning calls deliberately omit
+`-q`, which suppresses successful output as well as errors. Snapshots read cached
+native aggregates only while Heatmap is visible. Changes are acknowledged as
+pending; the next snapshot publishes the native result/error. Transport failures
+discard queued commands rather than replaying a stale Start/End/Delete request.
+
+Update **both** plugins for this bridge fix, rebuild Macrohelp's Rust overlay
+client (Resume/Delete now keep session IDs separate from RPC IDs), then restart
+the Omarchy shell to reload both keepLoaded services. No Hyprland reload, input
+observer reinjection, new HTTP endpoint, or device permission change is needed.
+The native IPC destinations for schedule shortcuts and Macrohelp profile/hotkey
+shortcuts are registered by those services, once per plugin rather than per monitor.
 
 Update the optional helper with the same commands after stopping it. To remove it:
 `sudo rm -- /usr/local/libexec/omarsket-input`. Remove saved profiles separately if wanted.

@@ -21,6 +21,7 @@ Item {
   property int operationEpoch: 0
   property var callbacks: ({})
   property bool heatmapConnected: false
+  property bool heatmapBusy: false
   property bool heatmapVisible: false
   onHeatmapVisibleChanged:if(heatmapVisible)openHeatmap()
   property bool heatmapAvailable: false
@@ -55,48 +56,59 @@ Item {
   function nativeEvent(name){if(name==="configreloaded"||name==="activelayout")nativeRefreshDelay.restart()}
   Timer {id:nativeRefreshDelay;interval:150;onTriggered:root.refreshNative()}
   Connections {target:Hyprland;function onRawEvent(event){root.nativeEvent(event.name)}}
-  readonly property string macrohelp: (Quickshell.env("XDG_DATA_HOME")||Quickshell.env("HOME")+"/.local/share")+"/macrohelp/overlay/bin/macrohelpctl"
   signal stopping()
+  signal hidePanel()
+  property var shortcutQueue:[]
+  function runSchedule(name){
+    if(!ready){error="Omarsket runtime is not ready";return}
+    name=String(name).replace(/\.omscht$/i,"")
+    if(!tasks.some(function(t){return t.id===name})){error="Schedule not found: "+name;return}
+    if(shortcutQueue.length>=16){error="Schedule shortcut queue is full";return}
+    shortcutQueue.push({name:name,epoch:operationEpoch});hidePanel();shortcutDelay.restart()
+  }
+  Timer {id:shortcutDelay;interval:300;onTriggered:{var queued=root.shortcutQueue;root.shortcutQueue=[];queued.forEach(function(item){if(root.ready&&item.epoch===root.operationEpoch)root.change({method:"run",name:item.name})})}}
+  Connections {target:root;function onStopping(){shortcutDelay.stop();root.shortcutQueue=[]}}
+  ShellIpc {target:"io.github.commanderturtle.omarsket";function run(name:string):void{root.runSchedule(name)}}
   function openHeatmap() {
-    if(root.heatmapConnected||health.running)return
+    if(root.heatmapConnected||bridge.running)return
     root.heatmapError=""
-    health.command=[macrohelp,"health"].concat(settings&&settings.macrohelpEnvFile?["--env",String(settings.macrohelpEnvFile)]:[])
-    health.running=true
+    root.heatmapCommand({action:"snapshot"})
   }
   function heatmapCommand(request) {
+    if(request.action!=="snapshot"&&(!heatmapConnected||heatmapBusy)){heatmapError="Wait for the current heatmap request to finish";return}
+    if(request.action!=="snapshot")heatmapBusy=true
     heatmapQueue.push(JSON.stringify(request))
     nextHeatmap()
   }
   function nextHeatmap() {
-    if(bridge.running||!heatmapConnected||!heatmapQueue.length)return
-    bridge.command=["omarchy-shell","-q","io.github.commanderturtle.macrohelp","heatmap",heatmapQueue.shift()]
+    if(bridge.running||!heatmapQueue.length)return
+    // -q suppresses successful stdout too. A data-returning IPC call must not
+    // use it. Probe the actual keepLoaded service, not the unrelated HTTP API.
+    bridge.command=["omarchy-shell","io.github.commanderturtle.macrohelp","heatmap",heatmapQueue.shift()]
     bridge.running=true
   }
   Timer {id:heatmapRefresh;interval:1000;repeat:true;running:root.heatmapConnected&&root.heatmapVisible;onTriggered:{if(!bridge.running&&!root.heatmapQueue.length)root.heatmapCommand({action:"snapshot"})}}
   Process {
-    id:health
-    stdout:StdioCollector {id:healthOutput;waitForEnd:true}
-    onExited:function(code){
-      var ok=false;try{ok=code===0&&!!JSON.parse(String(healthOutput.text))}catch(e){}
-      root.heatmapConnected=ok
-      root.heatmapError=ok?"":"failed to connect to macrohelp"
-      if(ok)root.heatmapCommand({action:"snapshot"})
-    }
-  }
-  Process {
     id:bridge
     stdout:StdioCollector {id:bridgeOutput;waitForEnd:true}
+    stderr:StdioCollector {id:bridgeError;waitForEnd:true}
     onExited:function(code){
       try{
-        if(code!==0)throw Error("failed to connect to macrohelp")
-        var reply=JSON.parse(String(bridgeOutput.text))
-        if(reply.state){root.heatmapState=reply.state;root.heatmapAvailable=!!reply.available;root.heatmapError=reply.error||""}
-        else if(reply.error)root.heatmapError=reply.error
+        if(code!==0)throw Error(String(bridgeError.text).trim()||"Macrohelp shell IPC failed")
+        var text=String(bridgeOutput.text).trim()
+        if(!text)throw Error("Macrohelp shell IPC returned no JSON; update both plugins and reload the shell")
+        var reply=JSON.parse(text)
+        if(!reply||reply.connected===false)throw Error(reply&&reply.error||"Macrohelp overlay controller is not ready")
+        if(reply.state&&reply.state.version===1&&Array.isArray(reply.state.sessions)){
+          root.heatmapConnected=true;root.heatmapState=reply.state;root.heatmapAvailable=!!reply.available;root.heatmapBusy=!!reply.pending;root.heatmapError=reply.error||""
+        }else if(root.heatmapConnected&&typeof reply.error==="string")root.heatmapError=reply.error
+        else throw Error("Invalid Macrohelp heatmap IPC response")
       }catch(e){
         root.heatmapConnected=false
         root.heatmapAvailable=false
+        root.heatmapBusy=false
         root.heatmapQueue=[]
-        root.heatmapError="failed to connect to macrohelp"
+        root.heatmapError="Macrohelp heatmap IPC: "+e.message
       }
       root.nextHeatmap()
     }

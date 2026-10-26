@@ -124,18 +124,18 @@ explicit schedule permission; imported schedules do not grant it automatically.
 | K01 · Layer navigation | No Tasket keyboard-layer UI | Additional: Heatmap, Macros, Software, Omarchy, Virtual input, Onboard |
 | K02 · Shared keyboard visual | Device-dependent physical keys | Present: full-size keyboard/numpad/media/Fn/Copilot legends, optional mouse/side buttons; not a guarantee of emitted firmware events |
 | K03 · Theme across all layers | Omarchy shell owns colors/font/scale | Present: shared KeyboardMap, native controls and Color/Style tokens; no local fixed palette |
-| K04 · Heatmap connection | Macrohelp owns live input and counters | Present: one health check on first use; subsequent aggregate snapshots via native shell IPC, not HTTP heartbeats |
+| K04 · Heatmap connection | Macrohelp owns live input and counters | Present: probes the registered keepLoaded shell IPC target directly, without quiet-output suppression or an unrelated HTTP health gate; cached aggregate refresh only while Heatmap is visible |
 | K05 · Heatmap values | Not in Tasket | Additional: 0…1 normalized aggregate weights; no ordered keystroke log |
-| K06 · Heatmap timers | Not in Tasket | Additional: named continuous/Pomodoro sessions, Start/Pause/Resume/End and persisted saved sessions |
+| K06 · Heatmap timers | Not in Tasket | Additional: named continuous/Pomodoro sessions, Start/Resume/End and persisted saved sessions; mutation acknowledgement is distinct from its native result |
 | K07 · Heatmap binding conflict | No bind operation in this layer | Not applicable: read-only key visualization; cannot rebind a key |
-| K08 · Macros layer | Macro schedules / Macrohelp commands | Present: native binding templates for saved schedules, Macrohelp hotkeys 0–9 and preset names |
+| K08 · Macros layer | Macro schedules / Macrohelp commands | Present: right-click/Assign a selected modifier chord, choose an existing schedule or import a uniquely named .omscht; native templates and registered IPC destinations for schedules, Macrohelp 0–9 and presets |
 | K09 · Software layer | Native compositor symbol bindings | Present: command/text templates in the native file; media/Copilot require an actual emitted key/chord |
 | K10 · Omarchy layer | Native user `hypr/bindings.lua`, `input.lua` | Present: edits those files directly; no alternate binding registry or generated include |
-| K11 · Default restore/read | Packaged defaults, personal overrides | Present: Default is read-only; user removes/edits native overrides; no automatic rewrite of packaged defaults |
+| K11 · Default restore/read | Packaged defaults, personal overrides | Present: read-only defaults/source plus an inactive-literal-default inventory; no evaluation of dynamic Lua or automatic rewrite of packaged defaults |
 | K12 · User named OS profiles / switch OSD | Requested higher-level UI | Absent: native file editor does not yet provide named OS binding profile save/switch or profile OSD |
 | K13 · Chord entry | Native keysyms / `code:N` / mouse codes | Present: manual text, physical keyboard/mouse selection and focused recorder |
 | K14 · Layout compatibility | Native XKB rules/model/layout/options | Present: existing libxkbcommon resolves physical/symbol collisions across configured layouts; actual device/Fn/IME behavior remains native |
-| K15 · Active binding lookup | Current compositor bindings | Present: description/chord search, Find, global/universal-submap collision display |
+| K15 · Active binding lookup | Current compositor bindings | Present: formatted chord/description/action inventory, command-based layer filters, submap scope labels, free-global-key inventory, modifier-aware board colors and Find in source |
 | K16 · Cross-layer macro/software/OS collisions | Same native binding namespace | Present: all three use the same active native list, including physical/symbol overlaps and draft literal bindings |
 | K17 · Conflict names | Browser/file-manager/etc. native descriptions | Present: warning lists exact chord and current action description, not a generic duplicate error |
 | K18 · Replace occupied chord | Native unbind then bind | Present: Review replacement → explicit Replace bindings / Keep existing; staged native `hl.unbind` lines apply only on Save |

@@ -46,7 +46,7 @@ function conflicts(bindings,nativeBindings,keymap) {
   return nativeBindings.filter(function(b){return (!b.submap||b.submap_universal===true||b.submap_universal==="true")&&bindings.some(function(d){return overlaps(d.chord,nativeChord(b),keymap)})})
 }
 // Extract literal chords only; never evaluate Lua or reconstruct native callbacks.
-function sourceChords(source) {
+function sourceTokens(source) {
   var tokens=[],i=0
   function longEnd(at){var m=source.slice(at).match(/^\[(=*)\[/);if(!m)return -1;var end=source.indexOf("]"+m[1]+"]",at+m[0].length);return end<0?source.length:end+m[1].length+2}
   while(i<source.length){
@@ -62,13 +62,53 @@ function sourceChords(source) {
     var ident=source.slice(i).match(/^[A-Za-z_][A-Za-z_0-9]*/)
     if(ident){tokens.push({value:ident[0]});i+=ident[0].length}else{tokens.push({value:c});i++}
   }
-  var out=[]
+  return tokens
+}
+function sourceBindings(source) {
+  var tokens=sourceTokens(String(source||"")),out=[]
   for(var n=0;n+5<tokens.length;n++){
     var a=tokens.slice(n,n+6)
     if(a[0].string||["o","hl"].indexOf(a[0].value)<0||a[1].value!=="."||["bind","rebind","bind_hold"].indexOf(a[2].value)<0||a[3].value!=="("||!a[4].string||a[5].value!==","||!a[4].value)continue
-    if(out.indexOf(a[4].value)<0)out.push(a[4].value)
+    var description=tokens[n+6],command=tokens[n+8]
+    out.push({chord:a[4].value,description:a[0].value==="o"&&description&&description.string?description.value:"Native default",dispatcher:"exec",arg:a[0].value==="o"&&command&&command.string?command.value:"",sourceOnly:true})
   }
   return out
+}
+function sourceChords(source) {return sourceBindings(source).map(function(b){return b.chord}).filter(function(k,i,a){return a.indexOf(k)===i})}
+function layer(binding) {
+  var command=String(binding.arg||""),dispatcher=String(binding.dispatcher||"exec")
+  if(/io\.github\.commanderturtle\.(?:macrohelp|omarsket)(?:\s|$)/.test(command))return "macro"
+  if(["exec","exec_cmd"].indexOf(dispatcher)<0||/\b(?:hyprctl|systemctl|loginctl|wpctl|brightnessctl)\b/.test(command))return "os"
+  if(/\bomarchy-launch-/.test(command))return "software"
+  if(/\bomarchy(?:-|\s)/.test(command)||binding.sourceOnly&&!command)return "os"
+  return "software"
+}
+function rows(bindings,defaults,keymap,which) {
+  var active=bindings||[]
+  var out=active.filter(function(b){return layer(b)===which}).map(function(b){return {chord:nativeChord(b),description:b.description||b.dispatcher||"Binding",action:String(b.arg||b.dispatcher||""),scope:b.submap||"global",active:true}})
+  sourceBindings(defaults).forEach(function(b){
+    if(keymap&&keymap.error)return
+    if(layer(b)!==which||conflicts([{chord:b.chord}],active,keymap).length)return
+    if(!out.some(function(row){return !row.active&&row.chord===b.chord}))out.push({chord:b.chord,description:b.description,action:b.arg||"Native Lua callback",active:false})
+  })
+  return out
+}
+function presentation(keys,bindings,defaults,keymap,mods,which) {
+  var active=(bindings||[]),scoped=active.filter(function(b){return layer(b)===which}),states={},hints=keyHints(keys,scoped,keymap,mods)
+  var inactive=rows(active,defaults,keymap,which).filter(function(row){return !row.active})
+  keys.forEach(function(key){
+    if(key.code===null)return
+    var selected=physical(key,mods),others=conflicts([{chord:selected}],active,keymap)
+    if(hints[key.id])states[key.id]="assigned"
+    else if(others.length){states[key.id]="other";hints[key.id]="Assigned in another layer:\n"+others.map(function(b){return nativeChord(b)+" · "+(b.description||b.dispatcher)}).join("\n")}
+    else {
+      if(keymap&&keymap.error){states[key.id]="unknown";hints[key.id]="Binding lookup incomplete: native XKB keymap unavailable";return}
+      var missing=inactive.filter(function(row){return overlaps(selected,row.chord,keymap)})
+      states[key.id]=missing.length?"default":"available"
+      hints[key.id]=missing.length?"Inactive default:\n"+missing.map(function(row){return row.chord+" · "+row.description}).join("\n"):"Unassigned in the global map for these modifiers"
+    }
+  })
+  return {hints:hints,states:states}
 }
 function draftConflicts(keys,source,keymap){return sourceChords(source).filter(function(k){return overlaps(keys,k,keymap)}).map(function(k){return {chord:k,description:"Binding in current draft"}})}
 function replacement(keys,kind,target,description,collisions,source){

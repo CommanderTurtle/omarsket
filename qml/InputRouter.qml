@@ -33,7 +33,9 @@ Column {
   readonly property var savedWarnings:Bindings.profileWarnings(book.profiles.find(function(p){return p.name===root.selected})||{},service.nativeBindings,service.nativeKeymap)
   readonly property var device:profile.devices[deviceIndex]||null
   readonly property bool starting:Date.now()<authorizingUntil&&!book.active
+  readonly property var remapPresentation:{var hints={},states={};Object.keys(device&&device.keys||{}).forEach(function(code){states[code]="assigned";hints[code]="evdev "+code+" → "+(root.device.keys[code].join(" + ")||"disabled")});return {hints:hints,states:states}}
   spacing:Style.space(8)
+  Text {text:"Virtual input · physical device remaps";textFormat:Text.PlainText;color:Commons.Color.accent;font.family:Style.font.family;font.pixelSize:Style.font.body}
   function call(request,callback){var owner=root;request.method="input-router";service.call(request,function(v,e){if(!owner||!owner.alive)return;owner.error=e||"";if(callback)callback(v,e)})}
   function load(first){if(loading)return;loading=true;call({action:"snapshot"},function(v,e){root.loading=false;if(!e){root.book=v;if(first&&!root.settingTouched&&v.active)root.optIn=true;if(v.error){root.error=v.error;root.authorizingUntil=0}}})}
   function choose(name){pendingStart="";selected=name;editing=false;previous=book.profiles.find(function(p){return p.name===name})||null;profile=previous?Tasks.copy(previous):{name:"",devices:[]};deviceIndex=0}
@@ -51,7 +53,7 @@ Column {
   Column {
     visible:root.optIn;width:parent.width;spacing:Style.space(8)
     Text {visible:!root.book.helper;width:parent.width;wrapMode:Text.Wrap;text:"Initialize the optional input helper in quick-start.md.";textFormat:Text.PlainText;color:Commons.Color.urgent;font.family:Style.font.family;font.pixelSize:Style.font.caption}
-    KeyboardMap {width:parent.width;keymap:root.service.nativeKeymap;showMouse:root.showMouse;selected:root.selectedKey;onKeySelected:function(k){if(!root.editing||k.code===null)return;root.selectedKey=k.id;if(root.pickingTarget)root.targetCode=k.code;else root.sourceCode=k.code}}
+    KeyboardMap {width:parent.width;keymap:root.service.nativeKeymap;hints:root.remapPresentation.hints;states:root.remapPresentation.states;showMouse:root.showMouse;selected:root.selectedKey;onKeySelected:function(k){if(!root.editing||k.code===null)return;root.selectedKey=k.id;if(root.pickingTarget)root.targetCode=k.code;else root.sourceCode=k.code}}
     Ui.Toggle {label:"Show mouse";checked:root.showMouse;onClicked:root.showMouse=!checked}
     Ui.Dropdown {label:"Profile";options:["ts_uinput"].concat(root.book.profiles.map(function(p){return p.name}));value:root.selected;enabled:!root.editing;onChanged:function(v){root.choose(v)}}
     Flow {
