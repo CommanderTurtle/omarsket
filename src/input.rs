@@ -3,17 +3,19 @@ use crate::model::Result;
 use serde_json::{Value, json};
 use std::{
     fs,
-    io::Write,
+    io::{Read, Write},
     path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::{
         Mutex,
         atomic::{AtomicU64, Ordering},
+        mpsc,
     },
+    thread,
+    time::{Duration, Instant},
 };
-#[cfg(unix)]
-use std::{io::Read, time::Duration};
 static UPDATE: Mutex<()> = Mutex::new(());
+static KEYMAP: Mutex<Option<(Value, Value)>> = Mutex::new(None);
 static TEMP_ID: AtomicU64 = AtomicU64::new(0);
 fn literal(text: &str) -> String {
     let mut out = String::from("\"");
@@ -158,6 +160,68 @@ fn restore(path: &Path, before: Option<&str>, written: &str) -> Result<()> {
         fs::remove_file(path).map_err(|e| e.to_string())
     }
 }
+fn keymap_signature(keyboard: &Value) -> Value {
+    // Device addresses and transient flags change around focus/hotplug, but
+    // these are the only compositor fields consumed by backend/keymap.py.
+    json!([
+        keyboard["name"],
+        keyboard["rules"],
+        keyboard["model"],
+        keyboard["layout"],
+        keyboard["variant"],
+        keyboard["options"],
+        keyboard["active_layout_index"],
+        keyboard["active_keymap"]
+    ])
+}
+
+fn keymap_output(mut command: Command, input: Vec<u8>, timeout: Duration) -> Result<Value> {
+    if input.len() > 65536 {
+        return Err("Native XKB request too large".into());
+    }
+    let mut child = command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    let mut stdin = child.stdin.take().ok_or("No keymap input")?;
+    let stdout = child.stdout.take().ok_or("No keymap output")?;
+    let (send, receive) = mpsc::sync_channel(1);
+    // Drain while compiling: a full pipe must not deadlock wait_with_output.
+    thread::spawn(move || {
+        let _ = stdin.write_all(&input);
+    });
+    thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let result = stdout
+            .take(2 * 1024 * 1024 + 1)
+            .read_to_end(&mut bytes)
+            .map(|_| bytes);
+        let _ = send.send(result);
+    });
+    let deadline = Instant::now() + timeout;
+    let success = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status.success(),
+            Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(10)),
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err("Native XKB query timed out".into());
+            }
+        }
+    };
+    let bytes = receive
+        .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+        .map_err(|_| "Native XKB query timed out")?
+        .map_err(|_| "Cannot read native XKB output")?;
+    if !success || bytes.len() > 2 * 1024 * 1024 {
+        return Err("Native XKB keymap unavailable".into());
+    }
+    serde_json::from_slice(&bytes).map_err(|e| e.to_string())
+}
+
 fn keymap() -> Value {
     let result = (|| -> Result<Value> {
         let devices = ipc("devices")?;
@@ -169,6 +233,12 @@ fn keymap() -> Value {
             .find(|k| k["main"] == true)
             .or(keyboards.first())
             .ok_or("No keyboard metadata")?;
+        let signature = keymap_signature(keyboard);
+        if let Some((saved, value)) = KEYMAP.lock().map_err(|_| "Keymap cache stopped")?.as_ref()
+            && saved == &signature
+        {
+            return Ok(value.clone());
+        }
         let root = std::env::current_exe()
             .map_err(|e| e.to_string())?
             .parent()
@@ -178,24 +248,21 @@ fn keymap() -> Value {
         let python = std::env::var_os("OMARSKET_PYTHON")
             .map(PathBuf::from)
             .unwrap_or_else(|| root.join("backend/.venv/bin/python"));
-        let mut child = Command::new(python)
-            .arg(root.join("backend/keymap.py"))
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|e| e.to_string())?;
-        child
-            .stdin
-            .take()
-            .ok_or("No keymap input")?
-            .write_all(keyboard.to_string().as_bytes())
-            .map_err(|e| e.to_string())?;
-        let output = child.wait_with_output().map_err(|e| e.to_string())?;
-        if !output.status.success() || output.stdout.len() > 2 * 1024 * 1024 {
+        let mut command = Command::new(python);
+        command.arg(root.join("backend/keymap.py"));
+        let value = keymap_output(
+            command,
+            keyboard.to_string().into_bytes(),
+            Duration::from_secs(2),
+        )?;
+        if !value["codes"].is_object()
+            || !value["labels"].is_object()
+            || value.get("error").is_some()
+        {
             return Err("Native XKB keymap unavailable".into());
         }
-        serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
+        *KEYMAP.lock().map_err(|_| "Keymap cache stopped")? = Some((signature, value.clone()));
+        Ok(value)
     })();
     result.unwrap_or_else(|_| json!({"error":"Native XKB keymap unavailable"}))
 }
@@ -254,6 +321,9 @@ fn read_binding_sources(dir: &Path, out: &mut String) {
 }
 pub fn request(r: &Value) -> Result<Value> {
     let _guard = UPDATE.lock().map_err(|_| "Input editor stopped")?;
+    if r["fresh"] == true || r["action"] == "save" {
+        *KEYMAP.lock().map_err(|_| "Keymap cache stopped")? = None;
+    }
     #[cfg(unix)]
     if unsafe { libc::geteuid() } == 0 {
         return Err("Do not run the Omarsket UI as root".into());
@@ -336,6 +406,64 @@ pub fn request(r: &Value) -> Result<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn keymap_cache_ignores_transient_device_flags_but_not_rules_or_group() {
+        let keyboard =
+            json!({"name":"kbd","layout":"us,de","rules":"evdev","active_layout_index":0});
+        let signature = keymap_signature(&keyboard);
+        let mut changed = keyboard.clone();
+        changed["address"] = json!("new device address");
+        changed["capsLock"] = json!(true);
+        assert_eq!(signature, keymap_signature(&changed));
+        for field in [
+            "name",
+            "rules",
+            "model",
+            "layout",
+            "variant",
+            "options",
+            "active_layout_index",
+            "active_keymap",
+        ] {
+            let mut changed = keyboard.clone();
+            changed[field] = json!("different");
+            assert_ne!(signature, keymap_signature(&changed), "{field}");
+        }
+    }
+    fn python(code: &str) -> Command {
+        let mut command = Command::new(if cfg!(windows) { "python" } else { "python3" });
+        command.args(["-I", "-c", code]);
+        command
+    }
+    #[test]
+    fn keymap_subprocess_is_bounded_and_drains_output() {
+        let result = keymap_output(
+            python("import json,sys; print(json.dumps(json.load(sys.stdin)))"),
+            b"{\"labels\":{}}".to_vec(),
+            Duration::from_secs(2),
+        )
+        .unwrap();
+        assert_eq!(result, json!({"labels":{}}));
+        let started = Instant::now();
+        let result = keymap_output(
+            python("import time; time.sleep(10)"),
+            vec![],
+            Duration::from_millis(100),
+        );
+        assert!(result.unwrap_err().contains("timed out"));
+        assert!(started.elapsed() < Duration::from_secs(2));
+        assert!(
+            keymap_output(
+                python("import sys; sys.stdout.write('x' * (3*1024*1024))"),
+                vec![],
+                Duration::from_secs(2)
+            )
+            .is_err()
+        );
+        assert!(
+            keymap_output(python("print('not JSON')"), vec![], Duration::from_secs(2)).is_err()
+        );
+    }
     #[test]
     fn literal_does_not_inject_lua() {
         assert_eq!(literal("\"\n\\"), "\"\\\"\\n\\\\\"");

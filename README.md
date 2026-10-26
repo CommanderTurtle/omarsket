@@ -53,8 +53,10 @@ Click the bar icon, create a schedule, add actions, save and schedule it. Right-
 the icon to stop all runs. Tools checks input capabilities. Imported schedules
 require explicit permission for system commands and startup execution.
 
-Keyboard provides the heatmap, native binding editor, and optional input-routing
+Keyboard provides the native binding editor and optional input-routing
 and hardware-discovery layers; initialization for the optional helper is in the quick start.
+Heatmap is deferred to a future opt-in Macrohelp file-log workflow; its placeholder
+does not connect, poll, or record.
 
 Schedules are individual `.omscht` files under `~/.local/share/omarsket/schedules`
 (or `$XDG_DATA_HOME`). Existing `.scht` files there or in `saved_tasks/` convert on

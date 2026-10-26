@@ -67,11 +67,15 @@ test("keyboard has discoverable right click, pretty inventories and distinct rea
   expect(read("Bindings.qml")).not.toMatch(/onBindingLayerChanged:.*load\(\)/)
   expect(read("InputRouter.qml")).toContain("states:root.remapPresentation.states")
   expect(read("Hardware.qml")).toContain("device-reported state (read-only)")
-  expect(read("InputLayers.qml")).toContain('panelVisible&&inputLayer==="heatmap"')
+  expect(read("InputLayers.qml")).toContain('property string inputLayer: "macro"')
+  expect(read("InputLayers.qml")).toContain('asynchronous:true')
+  expect(read("Heatmap.qml")).toContain('future feature')
+  expect(read("Heatmap.qml")).not.toMatch(/onCompleted|heatmapCommand|openHeatmap|Timer|Process/)
+  expect(read("Service.qml")).not.toMatch(/heatmapCommand|openHeatmap|heatmapQueue|id:bridge|id:health|ShellIpc/)
 })
 test("leaving an unsaved binding editor asks before destroying its draft",()=>{
   const source=read("InputLayers.qml"),s={inputLayer:"macro",pendingLayer:"",bindingsView:{item:{editing:true}}}
-  const code=source.slice(source.indexOf("  function selectLayer("),source.indexOf("  function updateVisibility("))
+  const code=source.slice(source.indexOf("  function selectLayer("),source.indexOf("  onInputLayerChanged:"))
   runInNewContext(code,s)
   s.selectLayer("heatmap");expect(s.inputLayer).toBe("macro");expect(s.pendingLayer).toBe("heatmap")
   s.selectLayer("software");expect(s.inputLayer).toBe("software");expect(s.pendingLayer).toBe("")

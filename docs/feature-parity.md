@@ -124,9 +124,9 @@ explicit schedule permission; imported schedules do not grant it automatically.
 | K01 · Layer navigation | No Tasket keyboard-layer UI | Additional: Heatmap, Macros, Software, Omarchy, Virtual input, Onboard |
 | K02 · Shared keyboard visual | Device-dependent physical keys | Present: full-size keyboard/numpad/media/Fn/Copilot legends, optional mouse/side buttons; not a guarantee of emitted firmware events |
 | K03 · Theme across all layers | Omarchy shell owns colors/font/scale | Present: shared KeyboardMap, native controls and Color/Style tokens; no local fixed palette |
-| K04 · Heatmap connection | Macrohelp owns live input and counters | Present: probes `macrohelpctl health` before opening the quiet-output shell IPC bridge; cached aggregate refresh only while Heatmap is visible |
-| K05 · Heatmap values | Not in Tasket | Additional: 0…1 normalized aggregate weights; no ordered keystroke log |
-| K06 · Heatmap timers | Not in Tasket | Additional: named continuous/Pomodoro sessions, Start/Resume/End and persisted saved sessions; mutation acknowledgement is distinct from its native result |
+| K04 · Heatmap connection | Future opt-in Macrohelp session | Deferred: inert placeholder; no shell IPC, connection probe or polling. Planned consumer of a temporary local Macrohelp log |
+| K05 · Heatmap values | Not in Tasket | Deferred: key/word visualization from explicitly enabled sessions; no new logging in this patch |
+| K06 · Heatmap timers | Not in Tasket | Deferred: explicit start on Macrohelp's side, user-directed log deletion through Omarsket |
 | K07 · Heatmap binding conflict | No bind operation in this layer | Not applicable: read-only key visualization; cannot rebind a key |
 | K08 · Macros layer | Macro schedules / Macrohelp commands | Present: right-click/Assign a selected modifier chord, choose an existing schedule or import a uniquely named .omscht; native templates and schedule shortcuts |
 | K09 · Software layer | Native compositor symbol bindings | Present: command/text templates in the native file; media/Copilot require an actual emitted key/chord |

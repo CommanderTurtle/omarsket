@@ -43,13 +43,17 @@ The optional `bash build-plugin.sh` performs the same initialization.
 
 ## Keyboard maps and hotkeys
 
-Active hotkey metadata is read on runtime startup, when opening Keyboard, after
-Hyprland reports a completed config reload or active-layout change, and with
-**Refresh hotkeys** in the keyboard header. Event bursts are debounced and reads
-are serialized. Refresh only reads bindings/XKB rules; it does not reload the
+Active hotkey metadata is read on runtime startup, after Hyprland reports a
+completed config reload or a changed device layout, and with **Refresh hotkeys**
+in the keyboard header. Opening Keyboard reuses the existing snapshot instead of
+querying it again. Repeated notifications for the same device/layout are ignored;
+event bursts are debounced and reads are serialized. Unchanged data retains its
+existing UI models. XKB reconstruction is cached by its actual rules/group and
+bounded to two seconds; manual Refresh and config reload invalidate that cache.
+Refresh only reads bindings/XKB rules; it does not reload the
 compositor, register hooks, start input routing, or execute the displayed keys.
 Failed reads retain the last map with an error instead of pretending no bindings
-exist. Macrohelp's heatmap connection is independent of this map.
+exist. Heatmap is deferred and has no connection or polling path.
 
 The board is a full-size ANSI reference, not hardware/firmware discovery. Legends
 follow the main keyboard's configured XKB layout when reconstructible; physical
@@ -85,8 +89,8 @@ asks before discarding it. Closing/unloading the entire plugin is not draft stor
 Virtual input highlights the selected device's remaps; Onboard stays explicitly
 read-only rather than pretending it can assign generic firmware bindings.
 
-**Refresh hotkeys** preserves an open draft and invalidates any pending replacement
-confirmation. **Reload file** (or Cancel) explicitly rereads the native file;
+**Refresh hotkeys** preserves an open draft; changed metadata invalidates any
+pending replacement confirmation. **Reload file** (or Cancel) explicitly rereads the native file;
 Save retains its existing external-edit check. Changing keyboard sections returns
 the view to the top rather than retaining another section's scroll offset.
 
@@ -116,14 +120,13 @@ accepts Ctrl+C. Touch/absolute devices stay on their existing native path;
 `ts_uinput` is an immutable default, not a keyboard router. Firmware-only Fn keys
 need an actual emitted event. Virtual devices are named `Omarsket …`; device-specific
 compositor settings may need a matching native rule.
-Macrohelp's compositor-level key display and heatmap observe the remapped output.
+Macrohelp's compositor-level key display observes the remapped output.
 
-The Keyboard heatmap first probes `macrohelpctl health` (a one-shot process, not
-either HTTP service); only when that succeeds does it open the shell IPC bridge
-(`omarchy-shell -q io.github.commanderturtle.macrohelp heatmap <request>`).
-If Macrohelp is unreachable, reopening the Heatmap retries the probe.
-Snapshots read cached native aggregates only while Heatmap is visible, refreshing
-the cache on a one-second cadence while it is shown.
+Keyboard opens on Macros. Heatmap is a future-feature placeholder: no connection
+probe, shell IPC, automatic polling, or recording starts when it is opened. The
+planned design is an explicitly started Macrohelp session writing a temporary
+local log, with read/display and user-directed deletion in Omarsket. That file-log
+workflow is not implemented by this patch.
 
 Update the optional helper with the same commands after stopping it. To remove it:
 `sudo rm -- /usr/local/libexec/omarsket-input`. Remove saved profiles separately if wanted.

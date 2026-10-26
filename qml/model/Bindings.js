@@ -45,6 +45,24 @@ function profileWarnings(profile,bindings,keymap){
 function conflicts(bindings,nativeBindings,keymap) {
   return nativeBindings.filter(function(b){return (!b.submap||b.submap_universal===true||b.submap_universal==="true")&&bindings.some(function(d){return overlaps(d.chord,nativeChord(b),keymap)})})
 }
+// Build physical/symbol aliases once per snapshot, not once per drawn key and
+// default binding. Preserve native order and duplicate bindings in each result.
+function bindingIndex(bindings,keymap) {
+  var index={bindings:bindings,keys:Object.create(null)}
+  bindings.forEach(function(b,i){
+    if(b.submap&&b.submap_universal!==true&&b.submap_universal!=="true")return
+    identities(nativeChord(b),keymap).forEach(function(key){
+      if(!index.keys[key])index.keys[key]=[]
+      index.keys[key].push(i)
+    })
+  })
+  return index
+}
+function indexedMatches(value,index,keymap) {
+  var found=Object.create(null)
+  identities(value,keymap).forEach(function(key){(index.keys[key]||[]).forEach(function(i){found[i]=true})})
+  return Object.keys(found).map(Number).sort(function(a,b){return a-b}).map(function(i){return index.bindings[i]})
+}
 // Extract literal chords only; never evaluate Lua or reconstruct native callbacks.
 function sourceTokens(source) {
   var tokens=[],i=0
@@ -84,26 +102,26 @@ function layer(binding) {
   return "software"
 }
 function rows(bindings,defaults,keymap,which) {
-  var active=bindings||[]
+  var active=bindings||[],index=bindingIndex(active,keymap),seen=Object.create(null)
   var out=active.filter(function(b){return layer(b)===which}).map(function(b){return {chord:nativeChord(b),description:b.description||b.dispatcher||"Binding",action:String(b.arg||b.dispatcher||""),scope:b.submap||"global",active:true}})
   sourceBindings(defaults).forEach(function(b){
     if(keymap&&keymap.error)return
-    if(layer(b)!==which||conflicts([{chord:b.chord}],active,keymap).length)return
-    if(!out.some(function(row){return !row.active&&row.chord===b.chord}))out.push({chord:b.chord,description:b.description,action:b.arg||"Native Lua callback",active:false})
+    if(layer(b)!==which||indexedMatches(b.chord,index,keymap).length)return
+    if(!seen[b.chord]){seen[b.chord]=true;out.push({chord:b.chord,description:b.description,action:b.arg||"Native Lua callback",active:false})}
   })
   return out
 }
 function presentation(keys,bindings,defaults,keymap,mods,which) {
-  var active=(bindings||[]),scoped=active.filter(function(b){return layer(b)===which}),states={},hints=keyHints(keys,scoped,keymap,mods)
-  var inactive=rows(active,defaults,keymap,which).filter(function(row){return !row.active})
+  var active=(bindings||[]),index=bindingIndex(active,keymap),scoped=active.filter(function(b){return layer(b)===which}),states={},hints=keyHints(keys,scoped,keymap,mods)
+  var inactive=bindingIndex(rows(active,defaults,keymap,which).filter(function(row){return !row.active}),keymap)
   keys.forEach(function(key){
     if(key.code===null)return
-    var selected=physical(key,mods),others=conflicts([{chord:selected}],active,keymap)
+    var selected=physical(key,mods),others=indexedMatches(selected,index,keymap)
     if(hints[key.id])states[key.id]="assigned"
     else if(others.length){states[key.id]="other";hints[key.id]="Assigned in another layer:\n"+others.map(function(b){return nativeChord(b)+" · "+(b.description||b.dispatcher)}).join("\n")}
     else {
       if(keymap&&keymap.error){states[key.id]="unknown";hints[key.id]="Binding lookup incomplete: native XKB keymap unavailable";return}
-      var missing=inactive.filter(function(row){return overlaps(selected,row.chord,keymap)})
+      var missing=indexedMatches(selected,inactive,keymap)
       states[key.id]=missing.length?"default":"available"
       hints[key.id]=missing.length?"Inactive default:\n"+missing.map(function(row){return row.chord+" · "+row.description}).join("\n"):"Unassigned in the global map for these modifiers"
     }
@@ -123,10 +141,10 @@ function replacement(keys,kind,target,description,collisions,source){
 }
 function physical(key,mods) { return chord((mods||[]).concat([key.code===null?"":key.code>=272&&key.code<=276?"mouse:"+key.code:"code:"+(key.code+8)]).filter(Boolean).join(" + ")) }
 function keyHints(keys,bindings,keymap,mods) {
-  var hints={}
+  var hints={},index=bindingIndex(bindings||[],keymap)
   keys.forEach(function(key){
     if(key.code===null)return
-    var matches=conflicts([{chord:physical(key,mods)}],bindings||[],keymap)
+    var matches=indexedMatches(physical(key,mods),index,keymap)
     if(matches.length)hints[key.id]=matches.map(function(b){return nativeChord(b)+" · "+(b.description||b.dispatcher||"Binding")}).join("\n")
   })
   return hints

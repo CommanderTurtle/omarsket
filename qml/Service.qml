@@ -20,14 +20,6 @@ Item {
   property int serial: 0
   property int operationEpoch: 0
   property var callbacks: ({})
-  property bool heatmapConnected: false
-  property bool heatmapBusy: false
-  property bool heatmapVisible: false
-  onHeatmapVisibleChanged:if(heatmapVisible)openHeatmap()
-  property bool heatmapAvailable: false
-  property string heatmapError: ""
-  property var heatmapState: ({version:1,active:null,sessions:[]})
-  property var heatmapQueue: []
   property var nativeBindings: []
   property var nativeKeymap: ({})
   property var nativeRouting: null
@@ -36,27 +28,45 @@ Item {
   property int nativeEpoch: 0
   property int nativeRevision: 0
   property string nativeError: ""
+  property var nativeLayouts: ({})
+  property bool nativeKeymapFresh: true
+  function ensureNative(){if(nativeRevision===0&&!nativeRefreshing)refreshNative(false)}
   function inputConfigCommand(request,callback){request.method="input-config";call(request,function(v,e){if(!e&&request.action==="save")root.refreshNative();if(callback)callback(v,e)})}
-  function refreshNative(){
+  function refreshNative(fresh){
     if(!ready)return
+    if(fresh!==false)nativeKeymapFresh=true
     if(nativeRefreshing){nativeRefreshPending=true;return}
     nativeRefreshing=true;nativeRefreshPending=false
-    var token=nativeEpoch
-    call({method:"input-config",action:"describe"},function(v,e){
+    var token=nativeEpoch,force=nativeKeymapFresh;nativeKeymapFresh=false
+    call({method:"input-config",action:"describe",fresh:force},function(v,e){
       if(token!==root.nativeEpoch)return
       root.nativeRefreshing=false
-      if(root.nativeRefreshPending){root.refreshNative();return}
+      var again=root.nativeRefreshPending;root.nativeRefreshPending=false
       var failure=e||(!v||!Array.isArray(v.bindings)?"Invalid native keyboard metadata":"")
       root.nativeError=failure||((v&&v.keymap&&v.keymap.error)||"")
       if(!failure){
-        root.nativeBindings=v.bindings;root.nativeKeymap=v.keymap||{};root.nativeRouting=v.routing||null;root.nativeRevision++
+        var changed=false,keymap=v.keymap||{},routing=v.routing||null
+        if(JSON.stringify(root.nativeBindings)!==JSON.stringify(v.bindings)){root.nativeBindings=v.bindings;changed=true}
+        if(JSON.stringify(root.nativeKeymap)!==JSON.stringify(keymap)){root.nativeKeymap=keymap;changed=true}
+        if(JSON.stringify(root.nativeRouting)!==JSON.stringify(routing)){root.nativeRouting=routing;changed=true}
+        if(changed||root.nativeRevision===0)root.nativeRevision++
       }
+      if(again)nativeRefreshDelay.restart()
     })
   }
-  function nativeEvent(name){if(name==="configreloaded"||name==="activelayout")nativeRefreshDelay.restart()}
-  Timer {id:nativeRefreshDelay;interval:150;onTriggered:root.refreshNative()}
-  Connections {target:Hyprland;function onRawEvent(event){root.nativeEvent(event.name)}}
-  readonly property string macrohelp: (Quickshell.env("XDG_DATA_HOME")||Quickshell.env("HOME")+"/.local/share")+"/macrohelp/overlay/bin/macrohelpctl"
+  function nativeEvent(name,data){
+    if(name==="configreloaded"){nativeLayouts=({});nativeKeymapFresh=true;nativeRefreshDelay.restart();return}
+    if(name!=="activelayout"||typeof data!=="string")return
+    var at=data.indexOf(",");if(at<1)return
+    var keyboard="$"+data.slice(0,at),layout=data.slice(at+1)
+    if(nativeLayouts[keyboard]===layout)return
+    // Focus changes can repeat a device's current layout. Only a new value
+    // invalidates legends; pointer/window events never query native metadata.
+    if(Object.keys(nativeLayouts).length>=32)nativeLayouts=({})
+    nativeLayouts[keyboard]=layout;nativeRefreshDelay.restart()
+  }
+  Timer {id:nativeRefreshDelay;interval:150;onTriggered:root.refreshNative(false)}
+  Connections {target:Hyprland;function onRawEvent(event){root.nativeEvent(event.name,event.data)}}
   signal stopping()
   signal hidePanel()
   property var shortcutQueue:[]
@@ -69,50 +79,6 @@ Item {
   }
   Timer {id:shortcutDelay;interval:300;onTriggered:{var queued=root.shortcutQueue;root.shortcutQueue=[];queued.forEach(function(item){if(root.ready&&item.epoch===root.operationEpoch)root.change({method:"run",name:item.name})})}}
   Connections {target:root;function onStopping(){shortcutDelay.stop();root.shortcutQueue=[]}}
-  function openHeatmap() {
-    if(root.heatmapConnected||health.running)return
-    root.heatmapError=""
-    health.command=[macrohelp,"health"].concat(settings&&settings.macrohelpEnvFile?["--env",String(settings.macrohelpEnvFile)]:[])
-    health.running=true
-  }
-  function heatmapCommand(request) {
-    heatmapQueue.push(JSON.stringify(request))
-    nextHeatmap()
-  }
-  function nextHeatmap() {
-    if(bridge.running||!heatmapConnected||!heatmapQueue.length)return
-    bridge.command=["omarchy-shell","-q","io.github.commanderturtle.macrohelp","heatmap",heatmapQueue.shift()]
-    bridge.running=true
-  }
-  Timer {id:heatmapRefresh;interval:1000;repeat:true;running:root.heatmapConnected&&root.heatmapVisible;onTriggered:{if(!bridge.running&&!root.heatmapQueue.length)root.heatmapCommand({action:"snapshot"})}}
-  Process {
-    id:health
-    stdout:StdioCollector {id:healthOutput;waitForEnd:true}
-    onExited:function(code){
-      var ok=false;try{ok=code===0&&JSON.parse(String(healthOutput.text))}catch(e){}
-      root.heatmapConnected=ok
-      root.heatmapError=ok?"":"failed to connect to macrohelp - coming soon"
-      if(ok)root.heatmapCommand({action:"snapshot"})
-    }
-  }
-  Process {
-    id:bridge
-    stdout:StdioCollector {id:bridgeOutput;waitForEnd:true}
-    onExited:function(code){
-      try{
-        if(code!==0)throw Error("failed to connect to macrohelp - coming soon")
-        var reply=JSON.parse(String(bridgeOutput.text))
-        if(reply.state){root.heatmapState=reply.state;root.heatmapAvailable=!!reply.available;root.heatmapError=reply.error||""}
-        else if(reply.error)root.heatmapError=reply.error
-      }catch(e){
-        root.heatmapConnected=false
-        root.heatmapAvailable=false
-        root.heatmapQueue=[]
-        root.heatmapError="failed to connect to macrohelp - coming soon"
-      }
-      root.nextHeatmap()
-    }
-  }
   readonly property string helper: (Quickshell.env("XDG_DATA_HOME") || (Quickshell.env("HOME") + "/.local/share")) + "/omarsket/runtime/bin/omarsket"
   readonly property string controlSocket: settings && settings.controlSocket === false ? "" : String((settings && settings.controlSocket) || (Quickshell.env("XDG_RUNTIME_DIR") ? Quickshell.env("XDG_RUNTIME_DIR") + "/omarsket/control.sock" : ""))
   readonly property var runtimeCommand: [helper, "session"].concat(settings && settings.directory ? ["--directory",String(settings.directory)] : []).concat(controlSocket ? ["--control-socket",controlSocket] : [])
@@ -181,7 +147,7 @@ Item {
     stderr: SplitParser { onRead: function(line) { root.error = line } }
     onExited: function(code) {
       root.ready = false
-      root.nativeEpoch++;root.nativeRefreshing=false;root.nativeRefreshPending=false;nativeRefreshDelay.stop()
+      root.nativeEpoch++;root.nativeRefreshing=false;root.nativeRefreshPending=false;root.nativeLayouts=({});root.nativeKeymapFresh=true;nativeRefreshDelay.stop()
       root.nativeError="Runtime stopped; hotkey map is stale"
       root.operationEpoch++;root.stopping()
       var callbacks = root.callbacks; root.callbacks = ({})

@@ -31,23 +31,23 @@ test("keyboard binding indicators respect modifiers, physical keys, mouse and su
 
 function nativeService(){
   const source=readFileSync(new URL("Service.qml",base),"utf8")
-  const code=source.slice(source.indexOf("  function refreshNative()"),source.indexOf("  Timer {id:nativeRefreshDelay"))
-  const requests=[],state={ready:true,nativeRefreshing:false,nativeRefreshPending:false,nativeEpoch:0,nativeRevision:0,nativeError:"",nativeBindings:[{key:"old"}],nativeKeymap:{},nativeRouting:null}
+  const code=source.slice(source.indexOf("  function ensureNative()"),source.indexOf("  Timer {id:nativeRefreshDelay"))
+  const requests=[],state={ready:true,nativeRefreshing:false,nativeRefreshPending:false,nativeKeymapFresh:true,nativeLayouts:{},nativeEpoch:0,nativeRevision:0,nativeError:"",nativeBindings:[{key:"old"}],nativeKeymap:{},nativeRouting:null}
   const delay={count:0,restart(){this.count++}}
   state.call=(request,callback)=>requests.push({request,callback})
-  Object.assign(state,new Function("root","nativeRefreshDelay",`with(root){${code};return {refreshNative,nativeEvent}}`)(state,delay))
+  Object.assign(state,new Function("root","nativeRefreshDelay",`with(root){${code};return {ensureNative,refreshNative,nativeEvent}}`)(state,delay))
   return {state,requests,delay}
 }
 
 test("keyboard startup and refresh are event-driven, with no pointer or key-event polling",()=>{
   const service=readFileSync(new URL("Service.qml",base),"utf8"),panel=readFileSync(new URL("Panel.qml",base),"utf8"),layers=readFileSync(new URL("InputLayers.qml",base),"utf8")
   expect(service).toContain('root.apply(reply.snapshot); root.refreshNative();')
-  expect(service).toContain('function onRawEvent(event){root.nativeEvent(event.name)}')
-  expect(layers).toContain('Component.onCompleted:{service.refreshNative();updateVisibility()}')
+  expect(service).toContain('function onRawEvent(event){root.nativeEvent(event.name,event.data)}')
+  expect(layers).toContain('Component.onCompleted:service.ensureNative()')
   expect(layers).toContain('onClicked:root.service.refreshNative()')
   expect(panel).toContain('scroll.contentItem.contentY=0')
-  expect(layers).toContain('onInputLayerChanged:{updateVisibility();resetScroll()}')
-  const refresh=service.slice(service.indexOf('function refreshNative()'),service.indexOf('signal stopping()'))
+  expect(layers).toContain('onInputLayerChanged:resetScroll()')
+  const refresh=service.slice(service.indexOf('function refreshNative('),service.indexOf('signal stopping()'))
   for(const forbidden of ['repeat:true','cursorpos','repl','reload"','dispatch','keyPressed'])expect(refresh).not.toContain(forbidden)
 })
 
@@ -64,11 +64,12 @@ test("changing modifiers updates a selected physical chord without replacing a m
 test("native refresh coalesces requests, rejects invalidated results and retains good data on failure",()=>{
   const {state:s,requests:r,delay}=nativeService()
   s.refreshNative();s.refreshNative()
-  expect(r).toHaveLength(1);expect(r[0].request).toEqual({method:"input-config",action:"describe"})
+  expect(r).toHaveLength(1);expect(r[0].request).toEqual({method:"input-config",action:"describe",fresh:true})
   r[0].callback({bindings:[{key:"stale"}],keymap:{}})
-  expect(s.nativeBindings[0].key).toBe("old");expect(r).toHaveLength(2)
+  expect(s.nativeBindings[0].key).toBe("stale");expect(r).toHaveLength(1)
+  expect(delay.count).toBe(1);s.refreshNative(false)
   r[1].callback({bindings:[{key:"new"}],keymap:{layout:"French"},routing:null})
-  expect(s.nativeBindings[0].key).toBe("new");expect(s.nativeRevision).toBe(1);expect(s.nativeRefreshing).toBe(false)
+  expect(s.nativeBindings[0].key).toBe("new");expect(s.nativeRevision).toBe(2);expect(s.nativeRefreshing).toBe(false)
   s.refreshNative();r[2].callback(null,"offline")
   expect(s.nativeBindings[0].key).toBe("new");expect(s.nativeError).toBe("offline")
   s.refreshNative();r[3].callback({bindings:{}})
@@ -78,6 +79,47 @@ test("native refresh coalesces requests, rejects invalidated results and retains
   for(const name of ["configreloaded","activelayout","activewindow","mousemove"])s.nativeEvent(name)
   expect(delay.count).toBe(2)
   s.ready=false;s.nativeRefreshing=false;s.refreshNative();expect(r).toHaveLength(5)
+})
+
+test("focus/layout storms do not refetch unchanged metadata or churn keyboard models",()=>{
+  const {state:s,requests:r,delay}=nativeService()
+  for(let i=0;i<1000;i++)s.ensureNative()
+  expect(r).toHaveLength(1);expect(s.nativeRefreshPending).toBe(false)
+  const snapshot={bindings:[{key:"f"}],keymap:{labels:{30:"a"}},routing:null}
+  r[0].callback(snapshot)
+  const bindings=s.nativeBindings,keymap=s.nativeKeymap,revision=s.nativeRevision
+  for(let i=0;i<10000;i++){
+    s.ensureNative();s.nativeEvent("activewindow","anything");s.nativeEvent("focusedmon","anything")
+    s.nativeEvent("activelayout","kbd,English (US)");s.nativeEvent("activelayout","virtual,English (US)")
+  }
+  expect(r).toHaveLength(1);expect(delay.count).toBe(2)
+  s.refreshNative(false);expect(r[1].request.fresh).toBe(false);r[1].callback(JSON.parse(JSON.stringify(snapshot)))
+  expect(s.nativeBindings).toBe(bindings);expect(s.nativeKeymap).toBe(keymap);expect(s.nativeRevision).toBe(revision)
+  s.nativeEvent("activelayout","kbd,German");expect(delay.count).toBe(3)
+  s.nativeEvent("configreloaded","");s.refreshNative(false);expect(r[2].request.fresh).toBe(true)
+  r[2].callback(snapshot);s.refreshNative();expect(r[3].request.fresh).toBe(true)
+})
+
+test("indexed binding hints preserve alias, submap, duplicate and native-order semantics",()=>{
+  const native=Array.from({length:100},(_,i)=>({key:i%2?"f":"code:41",modmask:i%3?64:4,submap:i%5?"":"resize",submap_universal:i%7===0,description:"b"+i}))
+  const keys=K.layout().concat(K.mouse()),map={codes:{f:[41],g:[41,42]}}
+  for(const mods of [[],["SUPER"],["CTRL"]]){
+    const expected={}
+    for(const key of keys){
+      if(key.code===null)continue
+      const matches=B.conflicts([{chord:B.physical(key,mods)}],native,map)
+      if(matches.length)expected[key.id]=matches.map(b=>B.nativeChord(b)+" · "+b.description).join("\n")
+    }
+    expect(B.keyHints(keys,native,map,mods)).toEqual(expected)
+  }
+})
+
+test("large keyboard snapshots resolve native chords linearly, not once per drawn key/default",()=>{
+  let reads=0
+  const native=Array.from({length:1000},(_,i)=>({get key(){reads++;return "F"+(i+1)},modmask:64,arg:"app",description:"App"}))
+  const defaults=native.map((_,i)=>`o.bind("SUPER + F${i+1}", "App", "app")`).join("\n")
+  B.presentation(K.layout(),native,defaults,{},["SUPER"],"software")
+  expect(reads).toBeLessThan(8*native.length)
 })
 
 test("refreshing hotkey metadata preserves unsaved binding drafts and cancels stale replacement prompts",()=>{
