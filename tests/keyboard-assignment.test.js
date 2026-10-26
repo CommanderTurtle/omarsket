@@ -87,5 +87,4 @@ test("schedule IPC closes the editor and waits before queueing, and Stop invalid
   s.operationEpoch++;runInNewContext(handler,s);expect(s.posts).toHaveLength(0)
   s.runSchedule("Work");runInNewContext(handler,s);expect(s.posts).toEqual([{method:"run",name:"Work"}])
   s.runSchedule("missing");expect(s.error).toContain("not found")
-  expect(source).toContain('ShellIpc {target:"io.github.commanderturtle.omarsket"')
 })

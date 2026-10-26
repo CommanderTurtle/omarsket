@@ -124,11 +124,11 @@ explicit schedule permission; imported schedules do not grant it automatically.
 | K01 · Layer navigation | No Tasket keyboard-layer UI | Additional: Heatmap, Macros, Software, Omarchy, Virtual input, Onboard |
 | K02 · Shared keyboard visual | Device-dependent physical keys | Present: full-size keyboard/numpad/media/Fn/Copilot legends, optional mouse/side buttons; not a guarantee of emitted firmware events |
 | K03 · Theme across all layers | Omarchy shell owns colors/font/scale | Present: shared KeyboardMap, native controls and Color/Style tokens; no local fixed palette |
-| K04 · Heatmap connection | Macrohelp owns live input and counters | Present: probes the registered keepLoaded shell IPC target directly, without quiet-output suppression or an unrelated HTTP health gate; cached aggregate refresh only while Heatmap is visible |
+| K04 · Heatmap connection | Macrohelp owns live input and counters | Present: probes `macrohelpctl health` before opening the quiet-output shell IPC bridge; cached aggregate refresh only while Heatmap is visible |
 | K05 · Heatmap values | Not in Tasket | Additional: 0…1 normalized aggregate weights; no ordered keystroke log |
 | K06 · Heatmap timers | Not in Tasket | Additional: named continuous/Pomodoro sessions, Start/Resume/End and persisted saved sessions; mutation acknowledgement is distinct from its native result |
 | K07 · Heatmap binding conflict | No bind operation in this layer | Not applicable: read-only key visualization; cannot rebind a key |
-| K08 · Macros layer | Macro schedules / Macrohelp commands | Present: right-click/Assign a selected modifier chord, choose an existing schedule or import a uniquely named .omscht; native templates and registered IPC destinations for schedules, Macrohelp 0–9 and presets |
+| K08 · Macros layer | Macro schedules / Macrohelp commands | Present: right-click/Assign a selected modifier chord, choose an existing schedule or import a uniquely named .omscht; native templates and schedule shortcuts |
 | K09 · Software layer | Native compositor symbol bindings | Present: command/text templates in the native file; media/Copilot require an actual emitted key/chord |
 | K10 · Omarchy layer | Native user `hypr/bindings.lua`, `input.lua` | Present: edits those files directly; no alternate binding registry or generated include |
 | K11 · Default restore/read | Packaged defaults, personal overrides | Present: read-only defaults/source plus an inactive-literal-default inventory; no evaluation of dynamic Lua or automatic rewrite of packaged defaults |

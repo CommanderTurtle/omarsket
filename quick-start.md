@@ -118,21 +118,12 @@ need an actual emitted event. Virtual devices are named `Omarsket …`; device-s
 compositor settings may need a matching native rule.
 Macrohelp's compositor-level key display and heatmap observe the remapped output.
 
-The Keyboard heatmap probes Macrohelp's registered keepLoaded shell IPC target,
-not `macrohelpctl health` or either HTTP service. If Macrohelp starts later or its
-bridge disconnects, reopen Heatmap or choose **Retry**. Errors name the IPC failure;
-they are not cached for the shell lifetime. Data-returning calls deliberately omit
-`-q`, which suppresses successful output as well as errors. Snapshots read cached
-native aggregates only while Heatmap is visible. Changes are acknowledged as
-pending; the next snapshot publishes the native result/error. Transport failures
-discard queued commands rather than replaying a stale Start/End/Delete request.
-
-Update **both** plugins for this bridge fix, rebuild Macrohelp's Rust overlay
-client (Resume/Delete now keep session IDs separate from RPC IDs), then restart
-the Omarchy shell to reload both keepLoaded services. No Hyprland reload, input
-observer reinjection, new HTTP endpoint, or device permission change is needed.
-The native IPC destinations for schedule shortcuts and Macrohelp profile/hotkey
-shortcuts are registered by those services, once per plugin rather than per monitor.
+The Keyboard heatmap first probes `macrohelpctl health` (a one-shot process, not
+either HTTP service); only when that succeeds does it open the shell IPC bridge
+(`omarchy-shell -q io.github.commanderturtle.macrohelp heatmap <request>`).
+If Macrohelp is unreachable, reopening the Heatmap retries the probe.
+Snapshots read cached native aggregates only while Heatmap is visible, refreshing
+the cache on a one-second cadence while it is shown.
 
 Update the optional helper with the same commands after stopping it. To remove it:
 `sudo rm -- /usr/local/libexec/omarsket-input`. Remove saved profiles separately if wanted.
