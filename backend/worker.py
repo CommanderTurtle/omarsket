@@ -14,8 +14,8 @@ import threading
 import time
 
 ALIASES = {
-    "CONTROL_LEFT": "ctrl", "CONTROL_RIGHT": "ctrl", "SHIFT_LEFT": "shift",
-    "SHIFT_RIGHT": "shift", "ALT_LEFT": "alt", "ALT_GR": "ISO_Level3_Shift",
+    "CONTROL_LEFT": "ctrl", "CONTROL_RIGHT": "Control_R", "SHIFT_LEFT": "shift",
+    "SHIFT_RIGHT": "Shift_R", "ALT_LEFT": "alt", "ALT_GR": "ISO_Level3_Shift",
     "WINDOWS": "super", "ENTER": "Return", "ESCAPE": "Escape",
     "BACKSPACE": "BackSpace", "SPACE": "space", "CAPS_LOCK": "Caps_Lock",
     "SCROLL_LOCK": "Scroll_Lock", "UP_ARROW": "Up", "DOWN_ARROW": "Down",
@@ -97,8 +97,11 @@ class Input:
         return self._mouse
 
     def close(self):
-        if self._mouse is not None:
-            self._mouse.close()
+        try:
+            self.keyboard.close()
+        finally:
+            if self._mouse is not None:
+                self._mouse.close()
 
     def move(self, x, y, milliseconds=0):
         if milliseconds:
@@ -115,7 +118,7 @@ class Input:
             self.mouse.click(int(x / SCALE), int(y / SCALE), "nothing")
 
     def timeline(self, events):
-        """One wtype keyboard alongside one persistent pointer for mixed input."""
+        """One virtual keyboard alongside one persistent pointer for mixed input."""
         keyboard = [(at, kind, key_name(key)) for at, kind, key in events
                     if key not in BUTTONS and not key.startswith("MOUSE_WHEEL_")]
         pointer = [(at, kind, key) for at, kind, key in events

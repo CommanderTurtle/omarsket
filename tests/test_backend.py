@@ -56,10 +56,44 @@ class BackendTests(unittest.TestCase):
         self.assertIn((60, "up", "A"), events)
 
     def test_aliases_and_hardware_key_rejection(self):
-        self.assertEqual(worker.key_name("CONTROL_RIGHT"), "ctrl")
+        self.assertEqual(worker.key_name("CONTROL_LEFT"), "ctrl")
+        self.assertEqual(worker.key_name("CONTROL_RIGHT"), "Control_R")
+        self.assertEqual(worker.key_name("SHIFT_LEFT"), "shift")
+        self.assertEqual(worker.key_name("SHIFT_RIGHT"), "Shift_R")
+        self.assertEqual(worker.key_name("ALT_GR"), "ISO_Level3_Shift")
         self.assertEqual(worker.key_name("NUMPAD_2"), "KP_2")
         self.assertEqual(worker.key_name("F12"), "F12")
         with self.assertRaises(ValueError): worker.key_name("FN")
+
+    def test_close_releases_keyboard_without_opening_a_pointer(self):
+        inputs = worker.Input.__new__(worker.Input)
+        inputs.keyboard = Mock()
+        inputs._mouse = None
+        inputs.close()
+        inputs.keyboard.close.assert_called_once_with()
+        self.assertIsNone(inputs._mouse)
+
+    def test_keyboard_timeline_keeps_right_modifiers_and_print_identity(self):
+        inputs = worker.Input.__new__(worker.Input)
+        inputs.keyboard = Mock()
+        inputs._mouse = None
+        inputs.timeline([(0, "down", "CONTROL_RIGHT"), (0, "down", "SHIFT_RIGHT"),
+                         (1, "down", "PRINT_SCREEN"), (2, "up", "PRINT_SCREEN"),
+                         (3, "up", "SHIFT_RIGHT"), (3, "up", "CONTROL_RIGHT")])
+        inputs.keyboard.sequence.assert_called_once_with([
+            (0, "down", "Control_R"), (0, "down", "Shift_R"),
+            (1, "down", "Print"), (2, "up", "Print"),
+            (3, "up", "Shift_R"), (3, "up", "Control_R")])
+        self.assertIsNone(inputs._mouse)
+
+    def test_close_attempts_both_devices_if_keyboard_cleanup_fails(self):
+        inputs = worker.Input.__new__(worker.Input)
+        inputs.keyboard = Mock()
+        inputs.keyboard.close.side_effect = RuntimeError("connection lost")
+        inputs._mouse = Mock()
+        with self.assertRaises(RuntimeError):
+            inputs.close()
+        inputs._mouse.close.assert_called_once_with()
 
     @patch.object(worker, "checked")
     def test_non_force_power_command(self, checked):
