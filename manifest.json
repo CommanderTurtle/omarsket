@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.commanderturtle.omarsket",
   "name": "Omarsket",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "author": "CommanderTurtle",
   "license": "AGPL-3.0-only",
   "description": "Local Wayland tasks, key sequences and cursor paths. A feature parity with Tasket++ (AmirHammouteneEI/ScheduledPasteAndKeys). Omarsket is a stateful macro engine with recordable keybinds for Omarchy, and keyboard hotkeys (similar to Razer Synapse's macro bindings). Omarsket is the first of it's kind to be used as a reliable, univseral Macro program within Hyprland/Wayland.",

@@ -1,1 +1,1 @@
-wayland-automation @ git+https://github.com/CommanderTurtle/Wayland-automation.git@70a396c5cc2dd9051d206356c4654b56fc46ba60
+wayland-automation @ git+https://github.com/CommanderTurtle/Wayland-automation.git@0aea350b162acf0850582b40bee979e11cda52dc
