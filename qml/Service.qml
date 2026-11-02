@@ -89,7 +89,7 @@ Item {
   }
   function refresh() { call({method: "snapshot"}, function(s, error) { if(!error)root.apply(s) }) }
   function call(request, callback) {
-    if (!ready) { error = "Run bash build-plugin.sh in the plugin checkout, then enable Omarsket."; if(callback)callback(null,error); return }
+    if (!ready) { error = "Run bash scripts/install/build-plugin.sh in the plugin checkout, then enable Omarsket."; if(callback)callback(null,error); return }
     var id = ++serial
     request.id = id
     if (callback) callbacks[id] = callback

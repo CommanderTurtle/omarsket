@@ -39,7 +39,7 @@ is required. Run these commands in a terminal; leave the plugin disabled until s
 
 For updates, disable the plugin, run `omarchy plugin update io.github.commanderturtle.omarsket`,
 repeat step 2 from its checkout, then enable.
-The optional `bash build-plugin.sh` performs the same initialization.
+The optional `bash scripts/install/build-plugin.sh` performs the same initialization.
 
 ## Keyboard maps and hotkeys
 

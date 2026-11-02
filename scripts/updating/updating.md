@@ -5,7 +5,7 @@ Prerequisite: initial setup done once per `quick-start.md` (plugin added, built,
 
 Usage, from the checkout root:
 
-    bash updating/after-pull.sh
+    bash scripts/updating/after-pull.sh
 
 Sequence (the canonical flow, nothing else):
 
@@ -21,6 +21,6 @@ Sequence (the canonical flow, nothing else):
 
 No tests. If the shell still loads a stale client afterwards,
 `omarchy restart shell` picks the new runtime up (macrohelp's
-`updating/after-pull.sh` does that as its final step).
+`scripts/updating/after-pull.sh` does that as its final step).
 
-Run this before macrohelp's `updating/after-pull.sh` after a pull.
+Run this before macrohelp's `scripts/updating/after-pull.sh` after a pull.

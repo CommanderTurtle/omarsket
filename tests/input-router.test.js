@@ -30,7 +30,7 @@ test("save snapshots its target, rejects double saves and retains failed drafts"
   m.pending.shift().callback(null,"outside edit");expect(m.profile.name).toBe("Desk");expect(m.loading).toBe(false);expect(m.error).toBe("outside edit")
 })
 test("authorization uses an installed root-owned helper, never user scripts or device permissions",()=>{
-  const s=read("src/remap_linux.rs"),build=read("scripts/build.sh")
+  const s=read("src/remap_linux.rs"),build=read("scripts/install/build.sh")
   expect(s).toContain('"sudo", "--", HELPER, "--profile"')
   expect(s).toContain('m.uid() == 0')
   expect(s).toContain("libc::setresuid(who, who, who)")

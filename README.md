@@ -31,7 +31,7 @@ or use the optional helper:
 
 ```sh
 cd ~/.config/omarchy/plugins/io.github.commanderturtle.omarsket
-bash build-plugin.sh
+bash scripts/install/build-plugin.sh
 omarchy plugin enable io.github.commanderturtle.omarsket
 ```
 
@@ -61,7 +61,7 @@ does not connect, poll, or record.
 Schedules are individual `.omscht` files under `~/.local/share/omarsket/schedules`
 (or `$XDG_DATA_HOME`). Existing `.scht` files there or in `saved_tasks/` convert on
 opening without removing originals. File provides import/export and collection
-JSON; Data manages reusable snippets. Optional runner: `bash build-runner.sh`.
+JSON; Data manages reusable snippets. Optional runner: `bash scripts/install/build-runner.sh`.
 
 Local controllers can share the plugin's queue through the owner-only Unix socket
 `$XDG_RUNTIME_DIR/omarsket/control.sock`. Set the plugin setting `controlSocket:false`

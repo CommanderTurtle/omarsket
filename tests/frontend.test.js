@@ -39,7 +39,7 @@ test("native manifest points to real source components",()=>{
   expect(panel).not.toMatch(/#[0-9a-f]{6}/i);
 });
 test("native setup keeps generated environments outside the plugin checkout",()=>{
-  const build=readFileSync(resolve(root,"scripts/build.sh"),"utf8");
+  const build=readFileSync(resolve(root,"scripts/install/build.sh"),"utf8");
   const service=readFileSync(resolve(root,"qml/Service.qml"),"utf8");
   expect(build).toContain('--target-dir "$CACHE/target"');
   expect(build).toContain('OUT="${XDG_DATA_HOME:-$HOME/.local/share}/omarsket/runtime"');

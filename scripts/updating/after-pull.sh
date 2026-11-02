@@ -1,11 +1,11 @@
 #!/bin/sh
 # Re-initialize omarsket after pulling changes into this checkout.
-# Run from the checkout root: bash updating/after-pull.sh
+# Run from the checkout root: bash scripts/updating/after-pull.sh
 # Zero frills: this is the canonical update sequence, no tests.
 
 set -eu
 
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 
 omarchy plugin disable io.github.commanderturtle.omarsket
 

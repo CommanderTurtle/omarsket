@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 MODE="${1:?plugin or runner required}"
 shift
 [[ "$MODE" == plugin || "$MODE" == runner ]] || { echo 'Expected plugin or runner' >&2; exit 1; }
 if [[ ${1:-} == --help ]]; then
-  printf 'Usage: bash build-%s.sh\nBuild the Rust engine and initialize its private Python environment.\nPlugin add/enable/update/remove are handled by omarchy plugin, not this script.\n' "$MODE"
+  printf 'Usage: bash scripts/install/build-%s.sh\nBuild the Rust engine and initialize its private Python environment.\nPlugin add/enable/update/remove are handled by omarchy plugin, not this script.\n' "$MODE"
   exit 0
 fi
 (( $# == 0 )) || { echo 'No install flags. Install dependencies first; use omarchy plugin to manage the plugin.' >&2; exit 1; }
