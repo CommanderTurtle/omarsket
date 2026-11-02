@@ -8,7 +8,7 @@ const T=runInNewContext(read("model/Tasks.js").replace(/^\.pragma library\s*/,""
 test("layers distinguish native actions, application commands and macro schedules",()=>{
   const bindings=[
     {key:"f",modmask:64,dispatcher:"exec",arg:"omarchy-launch-file-manager",description:"Files"},
-    {key:"g",modmask:64,dispatcher:"exec",arg:"omarchy-shell -q io.github.commanderturtle.omarsket run 'Work'",description:"Work"},
+    {key:"g",modmask:64,dispatcher:"exec",arg:"omarchy-shell -q omarsket run 'Work'",description:"Work"},
     {key:"h",modmask:64,dispatcher:"workspace",arg:"1",description:"Workspace"},
     {key:"j",modmask:64,dispatcher:"exec",arg:"omarchy-lock-screen",description:"Lock"},
     {key:"k",modmask:64,dispatcher:"exec",arg:"printf %s text | wtype -",description:"Text"},
@@ -22,7 +22,7 @@ test("layers distinguish native actions, application commands and macro schedule
 test("maps distinguish assigned, other-layer, inactive-default and free keys for the selected modifiers",()=>{
   const map={codes:{f:[41],g:[42],h:[43]}},keys=K.layout(),bindings=[
     {key:"F",modmask:64,dispatcher:"exec",arg:"editor",description:"Editor"},
-    {key:"G",modmask:64,dispatcher:"exec",arg:"omarchy-shell -q io.github.commanderturtle.omarsket run 'Work'",description:"Work"},
+    {key:"G",modmask:64,dispatcher:"exec",arg:"omarchy-shell -q omarsket run 'Work'",description:"Work"},
   ]
   const defaults='-- o.bind("SUPER + A", "comment", "ignored")\no.bind("SUPER + H", "Old editor", "old-editor")\no.bind("SUPER + F", "Editor", "editor")'
   const p=B.presentation(keys,bindings,defaults,map,["SUPER"],"software")
@@ -46,7 +46,7 @@ test("right-click assignment preserves modifiers and .omscht import stages a uni
   expect(pending[1].request).toEqual({method:"import",path:"/tasks/Work.omscht",name:"Work 2"})
   pending[1].callback(true,null)
   expect(s.target).toBe("Work 2");expect(s.draft).toBe("-- user file")
-  s.appendBinding();expect(s.draft).toContain("io.github.commanderturtle.omarsket run")
+  s.appendBinding();expect(s.draft).toContain("omarsket run")
   expect(pending).toHaveLength(2)
 })
 test("file picker cancellation races and bad files cannot bind a different chord or discard a draft",()=>{

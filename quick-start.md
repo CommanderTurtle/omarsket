@@ -7,7 +7,7 @@ is required. Run these commands in a terminal; leave the plugin disabled until s
 
    ```sh
    omarchy plugin add https://github.com/CommanderTurtle/omarsket.git
-   cd ~/.config/omarchy/plugins/io.github.commanderturtle.omarsket
+   cd ~/.config/omarchy/plugins/omarsket
    ```
 
 2. Build the engine and install the Python backend with `uv`:
@@ -34,10 +34,10 @@ is required. Run these commands in a terminal; leave the plugin disabled until s
 3. Enable the plugin:
 
    ```sh
-   omarchy plugin enable io.github.commanderturtle.omarsket
+   omarchy plugin enable omarsket
    ```
 
-For updates, disable the plugin, run `omarchy plugin update io.github.commanderturtle.omarsket`,
+For updates, disable the plugin, run `omarchy plugin update omarsket`,
 repeat step 2 from its checkout, then enable.
 The optional `bash scripts/install/build-plugin.sh` performs the same initialization.
 

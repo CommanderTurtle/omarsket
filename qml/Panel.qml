@@ -8,7 +8,7 @@ import "model/Tasks.js" as Tasks
 
 Ui.Panel {
   id: root
-  moduleName: "io.github.commanderturtle.omarsket"
+  moduleName: "omarsket"
   manageIpc: false
   readonly property var app: bar && bar.shell ? bar.shell.serviceFor(moduleName) : null
   readonly property color fg: barForeground

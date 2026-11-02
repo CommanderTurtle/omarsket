@@ -7,7 +7,7 @@ set -eu
 
 cd "$(dirname "$0")/../.."
 
-omarchy plugin disable io.github.commanderturtle.omarsket
+omarchy plugin disable omarsket
 
 omarsket_cache="${XDG_CACHE_HOME:-$HOME/.cache}/omarsket"
 omarsket_runtime="${XDG_DATA_HOME:-$HOME/.local/share}/omarsket/runtime"
@@ -21,4 +21,4 @@ install -m 644 backend/worker.py backend/keymap.py "$omarsket_runtime/backend/"
 uv venv --python "$(command -v python3)" --allow-existing "$omarsket_runtime/backend/.venv"
 uv pip install --python "$omarsket_runtime/backend/.venv/bin/python" -r backend/requirements.txt
 
-omarchy plugin enable io.github.commanderturtle.omarsket
+omarchy plugin enable omarsket

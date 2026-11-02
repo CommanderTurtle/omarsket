@@ -95,7 +95,7 @@ function sourceBindings(source) {
 function sourceChords(source) {return sourceBindings(source).map(function(b){return b.chord}).filter(function(k,i,a){return a.indexOf(k)===i})}
 function layer(binding) {
   var command=String(binding.arg||""),dispatcher=String(binding.dispatcher||"exec")
-  if(/io\.github\.commanderturtle\.(?:macrohelp|omarsket)(?:\s|$)/.test(command))return "macro"
+  if(/(?:^|\s)(?:macrohelp|omarsket)(?:\s|$)/.test(command))return "macro"
   if(["exec","exec_cmd"].indexOf(dispatcher)<0||/\b(?:hyprctl|systemctl|loginctl|wpctl|brightnessctl)\b/.test(command))return "os"
   if(/\bomarchy-launch-/.test(command))return "software"
   if(/\bomarchy(?:-|\s)/.test(command)||binding.sourceOnly&&!command)return "os"
@@ -154,9 +154,9 @@ function shell(text){return "'"+String(text).replace(/'/g,"'\\''")+"'"}
 function line(keys,kind,target,description){
   if(/[\x00-\x1f]/.test(keys)||!keys.trim())throw Error("Choose a chord")
   var command=String(target)
-  if(kind==="schedule")command="omarchy-shell -q io.github.commanderturtle.omarsket run "+shell(target)
-  else if(kind==="profile")command="omarchy-shell -q io.github.commanderturtle.macrohelp profile "+shell(target)
-  else if(kind==="hotkey"){if(!/^[0-9]$/.test(target))throw Error("Choose 0–9");command="omarchy-shell -q io.github.commanderturtle.macrohelp hotkey "+target}
+  if(kind==="schedule")command="omarchy-shell -q omarsket run "+shell(target)
+  else if(kind==="profile")command="omarchy-shell -q macrohelp profile "+shell(target)
+  else if(kind==="hotkey"){if(!/^[0-9]$/.test(target))throw Error("Choose 0–9");command="omarchy-shell -q macrohelp hotkey "+target}
   else if(kind==="text")command="printf %s "+shell(target)+" | wtype -"
   else if(kind!=="command")throw Error("Choose an action")
   return "o.bind("+lua(keys.trim())+", "+lua(description||target)+", "+lua(command)+")"

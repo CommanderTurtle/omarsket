@@ -45,7 +45,7 @@ else
 fi
 printf 'Initialized: %s\n' "$OUT"
 if [[ "$MODE" == plugin ]]; then
-  echo 'Enable with: omarchy plugin enable io.github.commanderturtle.omarsket'
+  echo 'Enable with: omarchy plugin enable omarsket'
 else
   printf 'Run with: %s/bin/omarsket run "Schedule name"\n' "$OUT"
 fi

@@ -30,9 +30,9 @@ Choose **No** at the enable prompt. Follow the [manual quick start](quick-start.
 or use the optional helper:
 
 ```sh
-cd ~/.config/omarchy/plugins/io.github.commanderturtle.omarsket
+cd ~/.config/omarchy/plugins/omarsket
 bash scripts/install/build-plugin.sh
-omarchy plugin enable io.github.commanderturtle.omarsket
+omarchy plugin enable omarsket
 ```
 
 Initialization builds the locked Rust dependencies and installs the pinned WA fork
@@ -70,11 +70,11 @@ in with `--control-socket PATH`. This does not enable HTTP or another input engi
 
 ## Update / remove
 
-Disable before updating, run `omarchy plugin update io.github.commanderturtle.omarsket`,
+Disable before updating, run `omarchy plugin update omarsket`,
 repeat initialization in its checkout, then enable again.
 
 ```sh
-omarchy plugin remove io.github.commanderturtle.omarsket
+omarchy plugin remove omarsket
 ```
 
 Removal unloads the plugin and removes its checkout. To also erase the runtime,
