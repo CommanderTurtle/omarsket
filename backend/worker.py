@@ -65,6 +65,13 @@ def checked(args, **kwargs):
                           capture_output=True, **kwargs)
 
 
+def clipboard_copy(args, payload):
+    # wl-copy forks an owner child that inherits our pipes; capture_output=True
+    # then deadlocks communicate() until the timeout even though the copy landed.
+    subprocess.run(args, input=payload, check=True, timeout=30,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
 def _detect_scale():
     """Read monitor scale once at startup. Physical = logical * scale."""
     try:
@@ -242,7 +249,7 @@ def system_action(action):
     elif command in ("screenshot", "printscreen"):
         if command == "printscreen":
             image = checked(["grim", "-"]).stdout
-            checked(["wl-copy", "--type", "image/png"], input=image)
+            clipboard_copy(["wl-copy", "--type", "image/png"], image)
         else:
             path = destination(p1, p2 == "Auto-rename if exists")
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -282,8 +289,8 @@ def perform(action, get_input):
     inputs = get_input()
     for _ in range(action.get("loop", 1)):
         if kind == "paste":
-            checked(["wl-copy", "--type", "text/plain;charset=utf-8"],
-                    input=action.get("content", "").encode())
+            clipboard_copy(["wl-copy", "--type", "text/plain;charset=utf-8"],
+                           action.get("content", "").encode())
             # Same insertion path used by Omarchy's clipboard paste helpers.
             time.sleep(0.15)
             inputs.keyboard.hotkey("super", "v")
